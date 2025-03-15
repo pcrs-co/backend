@@ -2,11 +2,20 @@ Hey Guys!
 Please follow these guidelines to ensure a smooth and collaborative workflow.
 
 ## Project Set-Up
-- Follow the [setup guide](SETUP.md)
+Clone the project
+
+```sh
+git clone https://github.com/nas3ts/pcrs.git
+```
+
+Follow the setup guides:
+- [backend](backend/SETUP.md)
+- [frontend](frontend/SETUP.md)
 
 ## Branching Strategy
 - Use **feature branches** for new features (`feat/your-feature`).
-- Use **bugfix branches** for fixes (`fix/your-fix`).
+- Use **bugfix branches** for fixes (`fix/your-fix`).<br>
+**Note**: There is a `develop` branch and `main` branch.
 - Merge into `develop` before `main` unless it's a hotfix (a quick software update that fixes a critical issue without a full release).
 
 ## Commit Message Format
