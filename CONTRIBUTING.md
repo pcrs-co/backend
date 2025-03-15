@@ -25,7 +25,6 @@ Follow the [Conventional Commits](https://www.conventionalcommits.org/) format t
 - `fix:` → Fixing a bug
 - `chore:` → General maintenance (e.g., refactoring, dependencies)
 - `docs:` → Documentation updates
-- `style:` → Code style changes (e.g., formatting, missing semicolons)
 - `refactor:` → Code changes that don’t add features or fix bugs
 - `test:` → Adding or updating tests
 - `ci:` → Changes to CI/CD workflows
