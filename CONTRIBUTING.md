@@ -7,7 +7,7 @@ Please follow these guidelines to ensure a smooth and collaborative workflow.
 ## Branching Strategy
 - Use **feature branches** for new features (`feat/your-feature`).
 - Use **bugfix branches** for fixes (`fix/your-fix`).
-- Merge into `develop` before `main` unless it's a hotfix.
+- Merge into `develop` before `main` unless it's a hotfix (a quick software update that fixes a critical issue without a full release).
 
 ## Commit Message Format
 Follow the [Conventional Commits](https://www.conventionalcommits.org/) format to ensure consistency:
