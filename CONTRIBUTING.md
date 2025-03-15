@@ -13,8 +13,8 @@ Follow the setup guides:
 - [frontend](frontend/SETUP.md)
 
 ## Branching Strategy
-- Use **feature branches** for new features (`feat/your-feature`).
-- Use **bugfix branches** for fixes (`fix/your-fix`).<br>
+- Use **`feat` branches** for new features (`feat/your-feature`).
+- Use **`fix` branches** for fixes (`fix/your-fix`).<br>
 **Note**: There is a `develop` branch and `main` branch.
 - Merge into `develop` before `main` unless it's a hotfix (a quick software update that fixes a critical issue without a full release).
 
