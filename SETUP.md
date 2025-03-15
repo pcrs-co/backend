@@ -4,9 +4,10 @@ To get started with the project, follow the steps below:
 
 ### 1. **Create a Virtual Environment**
 
-Run the following command to create a virtual environment inside the project directory:
+Run the following command to create a virtual environment inside the `backend` folder:
 
 ```bash
+cd backend
 python3 -m venv env
 ```
 
