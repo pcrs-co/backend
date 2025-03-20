@@ -1,12 +1,18 @@
+import styles from '../../styles/layout/NavigationBar.module.css'
+
 function NavigationBar() {
 
     return (
         <>
-            <header className="navigation-bar">
-                <div className="site-logo">
+            <header className={styles.navigationBar}>
+
+                <div className={styles.siteLogo}>
+                    <a href="/home">
                     <h1>PCRS</h1>
+                    </a>
                 </div>
-                {/* <div>
+
+                {/* <div className={styles.searchBar}>
                     <input 
                         type="text" 
                         placeholder="Search" 
@@ -16,10 +22,12 @@ function NavigationBar() {
                          }} 
                     />
                 </div> */}
-                <div className="auth-links">
-                    <a href="/register">Register</a> | 
+
+                <div className={styles.authLinks}>
+                    <a href="/register">Sign Up</a>
                     <a href="/login">Login</a>                 
                 </div>
+                
             </header>
         </>
     )
