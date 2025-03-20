@@ -24,7 +24,7 @@ function NavigationBar() {
                 </div> */}
 
                 <div className={styles.authLinks}>
-                    <a href="/register">Sign Up</a>
+                    <a href="/register">Sign Up</a> | 
                     <a href="/login">Login</a>                 
                 </div>
                 

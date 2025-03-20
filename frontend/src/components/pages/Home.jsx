@@ -1,6 +1,6 @@
 import NavigationBar from '../layout/NavigationBar.jsx'
 
-function App() {
+function Home() {
 
   return (
     <>
@@ -10,4 +10,4 @@ function App() {
   )
 }
 
-export default App
+export default Home
