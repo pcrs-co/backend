@@ -2,9 +2,10 @@ function NavigationBar() {
 
     return (
         <>
-            <header>
-                <span className="site-logo">
-                <h1>PCRS</h1>
+            <header className="navigation-bar">
+                <div className="site-logo">
+                    <h1>PCRS</h1>
+                </div>
                 {/* <div>
                     <input 
                         type="text" 
@@ -15,11 +16,10 @@ function NavigationBar() {
                          }} 
                     />
                 </div> */}
-                </span>
-                <span className="auth-links">
+                <div className="auth-links">
                     <a href="/register">Register</a> | 
                     <a href="/login">Login</a>                 
-                </span>
+                </div>
             </header>
         </>
     )
