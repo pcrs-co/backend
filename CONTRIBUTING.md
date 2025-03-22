@@ -13,10 +13,24 @@ Follow the setup guides:
 - [frontend](frontend/SETUP.md)
 
 ## Branching Strategy
-- Use **`feat` branches** for new features (`feat/your-feature`).
-- Use **`fix` branches** for fixes (`fix/your-fix`).<br>
-**Note**: There is a `develop` branch and `main` branch.
+- There is a `develop` branch and `main` branch.
+- `main` branch is for stable releases.
+```bash
+# after you clone the repo
+# switch to the `develop` branch
+git checkout develop
+```
+
+- Use `feat` branches for new features (`feat/your-feature`).
+- Use `fix` branches for fixes (`fix/your-fix`).
+```bash
+git checkout -b feat/your-feature
+git checkout -b fix/your-fix
+```
+
 - Merge into `develop` before `main` unless it's a hotfix (a quick software update that fixes a critical issue without a full release).
+
+
 
 ## Commit Message Format
 Follow the [Conventional Commits](https://www.conventionalcommits.org/) format to ensure consistency:
