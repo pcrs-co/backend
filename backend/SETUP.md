@@ -1,10 +1,10 @@
 # PCRS Backend Set-Up
 
-To get started with the project, follow the steps below:
+To get started, follow the steps below:
 
 ### 1. **Create a Virtual Environment**
 
-Run the following command to create a virtual environment inside the `backend` folder:
+Run the following command (while in project root) to create a virtual environment inside the `backend` folder:
 
 ```bash
 cd backend
@@ -77,4 +77,4 @@ pip install -r requirements.txt
 With these steps, you should be able to set up and run the project. If you have any issues or need further assistance, feel free to reach out.
 
 
-### Go on with [contributing](CONTRIBUTING.md)!
+### Go on with [contributing](../CONTRIBUTING.md)!
