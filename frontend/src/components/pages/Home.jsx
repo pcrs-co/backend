@@ -10,7 +10,7 @@ function Home() {
 
       <div className={styles.intro}>
         <div className={styles.introHero}>
-          <h1>Pick Purpose. Get Specs.<br/>See Available Devices.</h1>
+          <h1>Choose Purpose. Get Specs.<br/>See Available Devices.</h1>
           <p>
             We provide device specifications, 
             pricing, and availability 
