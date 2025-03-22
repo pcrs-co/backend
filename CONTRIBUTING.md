@@ -2,10 +2,11 @@ Hey Guys!
 Please follow these guidelines to ensure a smooth and collaborative workflow.
 
 ## Project Set-Up
-Clone the project
+Clone and open the project:
 
 ```sh
 git clone https://github.com/nas3ts/pcrs.git
+cd pcrs
 ```
 
 Follow the setup guides:
