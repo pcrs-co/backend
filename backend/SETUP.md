@@ -1,5 +1,7 @@
 # PCRS Backend Set-Up
 
+## **NOTE** - Ensure you have Python installed on your system.
+
 To get started, follow the steps below:
 
 ### 1. **Create a Virtual Environment**
