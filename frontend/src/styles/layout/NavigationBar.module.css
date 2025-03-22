@@ -1,0 +1,34 @@
+a {
+    text-decoration: none;
+    color: #000000;
+}
+
+.navigationBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 50px;
+    height: 10vh;
+    background-color: grey;
+}
+
+/* Site Logo */
+
+
+/* Search Bar */
+.searchBar {
+    display: flex;
+    align-items: center;
+    background-color: rgb(122, 122, 122);
+    padding: 5px;
+    border-radius: 5px;
+}
+
+/* Auth Links */
+.authLinks {
+    display: flex;
+    gap: 15px;
+    font-size: 15px;
+    margin: 0 5px;
+}
+
