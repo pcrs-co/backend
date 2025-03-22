@@ -1,4 +1,4 @@
-# PCRS Project Set-Up
+# PCRS Backend Set-Up
 
 To get started with the project, follow the steps below:
 
