@@ -25,7 +25,7 @@ function HomePage() {
             /> Get Started </button>
         </div>
         
-        <div className={styles.introImage}>
+        <div className={styles.approachSelectionContainer}>
         
         </div>
       </div>
