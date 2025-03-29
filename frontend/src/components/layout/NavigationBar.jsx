@@ -1,4 +1,5 @@
 import styles from '../../styles/layout/NavigationBar.module.css'
+import searchIcon from '../../assets/icons/icons8-search.svg'
 
 function NavigationBar() {
 
@@ -12,18 +13,22 @@ function NavigationBar() {
                     </a>
                 </div>
 
-                {/* <div className={styles.searchBar}>
-                    <input 
-                        type="text" 
-                        placeholder="Search" 
-                        style={{ 
-                            backgroundColor: 'transparent',
-                            border: 'none'
-                         }} 
-                    />
-                </div> */}
-
                 <div className={styles.authLinks}>
+                    <div className={styles.searchBar}>
+                        <input 
+                            type="text" 
+                            placeholder="Search" 
+                            style={{ 
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                outline: 'none',
+                                color: 'white'
+                            }} 
+                        />
+                        {/* <button>
+                            <img src={searchIcon} className={styles.searchIcon}/>
+                        </button> */}
+                    </div>
                     <a href="/register">Sign Up</a> | 
                     <a href="/login">Login</a>                 
                 </div>

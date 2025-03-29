@@ -24,6 +24,11 @@ a {
     border-radius: 5px;
 }
 
+.searchIcon {
+    width: 20px;
+    height: 20px;
+}
+
 /* Auth Links */
 .authLinks {
     display: flex;
