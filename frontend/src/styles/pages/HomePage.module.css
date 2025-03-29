@@ -7,7 +7,7 @@
 }
 
 .introHero {
-    height: 50vh;
+    height: 390px;
     max-width: 50vw;
     display: flex;
     flex-direction: column;
@@ -56,7 +56,7 @@
     border-radius: 10px 10px 0px 0px;
     background-color: grey;
     color: aliceblue;
-    height: 40vh;
+    height: 315px;
     width: 80vw;
 
     /* content placement */
