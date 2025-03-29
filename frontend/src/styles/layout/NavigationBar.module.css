@@ -1,6 +1,6 @@
 a {
     text-decoration: none;
-    color: #000000;
+    color: #adacac;
 }
 
 .navigationBar {
@@ -9,7 +9,7 @@ a {
     align-items: center;
     padding: 10px 50px;
     height: 10vh;
-    background-color: grey;
+    background-color: rgb(42, 42, 42);
 }
 
 /* Site Logo */

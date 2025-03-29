@@ -1,6 +1,8 @@
 import NavigationBar from '../layout/NavigationBar.jsx'
 import styles from '../../styles/pages/HomePage.module.css'
 import gearIcon from '../../assets/icons/icons8-gear-100.svg'
+import ApproachSelection from '../features/ApproachSelection.jsx'
+import Footer from '../layout/Footer.jsx'
 
 
 function HomePage() {
@@ -26,10 +28,13 @@ function HomePage() {
         </div>
         
         <div className={styles.approachSelectionContainer}>
-        
+
+          <ApproachSelection />
+          
         </div>
       </div>
 
+      <Footer />
     </>
   )
 }

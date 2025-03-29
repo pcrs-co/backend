@@ -8,7 +8,7 @@ function NavigationBar() {
 
                 <div className={styles.siteLogo}>
                     <a href="/home">
-                    <h1>PCRS</h1>
+                    <h3>PCRS</h3>
                     </a>
                 </div>
 
