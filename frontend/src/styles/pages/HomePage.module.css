@@ -52,6 +52,11 @@
     color: thistle;
 }
 
+.intro button:hover .gearIcon {
+    transform: rotate(180deg);
+    transition: transform 0.3s ease-in-out;
+}
+
 .approachSelectionContainer {
     border-radius: 10px 10px 0px 0px;
     background-color: grey;
