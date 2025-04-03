@@ -6,10 +6,9 @@ To get started, follow the steps below:
 
 ### 1. **Create a Virtual Environment**
 
-Run the following command (while in project root) to create a virtual environment inside the `backend` folder:
+Run the following command (while in project root) to create a virtual environment:
 
 ```bash
-cd backend
 python3 -m venv env
 ```
 
@@ -37,6 +36,15 @@ After activating the virtual environment, install the necessary dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+### 4. **Move the requirements.txt**
+
+After activating the virtual environment, install the necessary dependencies:
+
+```bash
+mv requirements.txt /backend
+cd backend
 ```
 
 ## **NOTE**
@@ -77,6 +85,5 @@ pip install -r requirements.txt
 ---
 
 With these steps, you should be able to set up and run the project. If you have any issues or need further assistance, feel free to reach out.
-
 
 ### Go on with [contributing](../CONTRIBUTING.md)!
