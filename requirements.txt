@@ -10,3 +10,7 @@ psycopg2-binary
 python-dotenv
 qrcode[pil]
 mysqlclient
+pymysql
+pandas
+odfpy
+openpyxl
