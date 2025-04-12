@@ -102,8 +102,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "pcrs",
-        "USER": "root",
-        "PASSWORD": "",
+        "USER": "pcrs",
+        "PASSWORD": "Pcrs@password3",
         "HOST": "localhost",
         "PORT": "3306",
     }

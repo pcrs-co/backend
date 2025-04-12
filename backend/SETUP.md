@@ -84,6 +84,19 @@ pip install -r requirements.txt
 
 ---
 
+### 5. **SETTING UP THE DATABASE**
+  ```bash
+  mysql -u root -p
+  ```
+  Enter your password
+
+  ```bash
+  CREATE DATABASE pcrs;
+  CREATE USER 'pcrs'@'localhost' IDENTIFIED BY 'Pcrs@password3';
+  GRANT ALL PRIVILEGES ON pcrs.* TO 'pcrs'@'localhost';
+  FLUSH PRIVILEGES;
+  ```
+
 With these steps, you should be able to set up and run the project. If you have any issues or need further assistance, feel free to reach out.
 
 ### Go on with [contributing](../CONTRIBUTING.md)!
