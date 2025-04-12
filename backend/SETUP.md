@@ -97,6 +97,13 @@ pip install -r requirements.txt
   FLUSH PRIVILEGES;
   ```
 
+### 6. **RUNNING THE BACKEND**
+
+```bash
+  python3 manage.py makemigrations
+  python3 manage.py migrate
+  ```
+
 With these steps, you should be able to set up and run the project. If you have any issues or need further assistance, feel free to reach out.
 
 ### Go on with [contributing](../CONTRIBUTING.md)!
