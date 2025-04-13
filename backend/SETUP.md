@@ -78,7 +78,7 @@ pip install -r requirements.txt
 
 ### 5. **SETTING UP THE DATABASE**
   ```bash
-  mysql -u root -p
+  mariadb -u root -p
   ```
   Enter your password
 
