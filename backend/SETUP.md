@@ -39,15 +39,6 @@ After activating the virtual environment, install the necessary dependencies:
 pip install -r requirements.txt
 ```
 
-### 4. **Move the requirements.txt**
-
-After activating the virtual environment, install the necessary dependencies:
-
-```bash
-mv requirements.txt /backend
-cd backend
-```
-
 ## **NOTE**
 
 If you encounter an error while installing project dependencies, it might be because MySQL client libraries are missing. To fix this, follow the instructions below for your operating system:
