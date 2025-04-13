@@ -20,6 +20,10 @@ pymysql.install_as_MySQLdb()
 
 load_dotenv()
 
+# SIMPLE_JWT = {
+#     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+#     "AUTH_HEADER_TYPES": ("Bearer",),
+# }
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -61,6 +65,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "login_and_register",
 ]
 
 MIDDLEWARE = [
@@ -102,8 +107,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "pcrs",
-        "USER": "root",
-        "PASSWORD": "",
+        "USER": "pcrs",
+        "PASSWORD": "Pcrs@password3",
         "HOST": "localhost",
         "PORT": "3306",
     }
@@ -111,6 +116,8 @@ DATABASES = {
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
+
+AUTH_USER_MODEL = "login_and_register.CustomUser"
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -150,5 +157,8 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWS_ORIGINS = [
+    "http://localhost:5173/",
+]
+# CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
