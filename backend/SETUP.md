@@ -6,9 +6,10 @@ To get started, follow the steps below:
 
 ### 1. **Create a Virtual Environment**
 
-Run the following command (while in project root) to create a virtual environment:
+Run the following command (while in project root) to create a virtual environment inside backend folder:
 
 ```bash
+cd backend
 python3 -m venv env
 ```
 
