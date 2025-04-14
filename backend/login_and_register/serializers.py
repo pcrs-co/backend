@@ -58,5 +58,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class ProductSerializer(serializers.ModelSerializer):
+    pass
+
+
 class VendorSerializer(serializers.ModelSerializer):
     pass
