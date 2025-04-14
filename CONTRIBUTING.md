@@ -1,7 +1,8 @@
-Hey Guys! 
+Hey Guys!
 Please follow these guidelines to ensure a smooth and collaborative workflow.
 
 ## Project Set-Up
+
 Clone and open the project:
 
 ```sh
@@ -10,12 +11,15 @@ cd pcrs
 ```
 
 Follow the setup guides:
+
 - [backend](backend/SETUP.md)
 - [frontend](frontend/SETUP.md)
 
 ## Branching Strategy
+
 - There is a `develop` branch and `main` branch.
 - `main` branch is for stable releases.
+
 ```bash
 # after you clone the repo
 # switch to the `develop` branch
@@ -24,6 +28,7 @@ git checkout develop
 
 - Use `feat` branches for new features (`feat/your-feature`).
 - Use `fix` branches for fixes (`fix/your-fix`).
+
 ```bash
 git checkout -b feat/your-feature
 git checkout -b fix/your-fix
@@ -31,9 +36,8 @@ git checkout -b fix/your-fix
 
 - Merge into `develop` before `main` unless it's a hotfix (a quick software update that fixes a critical issue without a full release).
 
-
-
 ## Commit Message Format
+
 Follow the [Conventional Commits](https://www.conventionalcommits.org/) format to ensure consistency:
 
 - `feat:` → Adding a new feature
@@ -45,6 +49,7 @@ Follow the [Conventional Commits](https://www.conventionalcommits.org/) format t
 - `ci:` → Changes to CI/CD workflows
 
 **Example Commit Messages:**
+
 ```sh
 feat: add user authentication
 fix: resolve crash on profile page
@@ -52,6 +57,7 @@ chore: update dependencies
 ```
 
 ## Making Changes
+
 - Follow the team’s **coding standards** and best practices.
 - Write clear and concise **commit messages** as per the format above.
 - Run tests before submitting changes:
@@ -61,6 +67,7 @@ chore: update dependencies
 - Ensure your code is reviewed by at least one team member before merging.
 
 ## Submitting a Pull Request
+
 1. **Ensure your branch is up to date** with `develop`:
    ```sh
    git checkout develop
@@ -79,7 +86,7 @@ chore: update dependencies
    - Wait for team feedback before merging.
 
 ## Communication
+
 - Let's talk on the WhatsApp group.
 
 Happy coding! 🚀
-

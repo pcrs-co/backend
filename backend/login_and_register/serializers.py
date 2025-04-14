@@ -1,4 +1,5 @@
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.models import Group
 from rest_framework import serializers
 from .models import *
 import re
@@ -40,7 +41,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("password2")
-        return CustomUser.objects.create_user(
+        user = CustomUser.objects.create_user(
             username=validated_data["username"],
             password=validated_data["password"],
             first_name=validated_data["first_name"],
@@ -50,3 +51,12 @@ class RegisterSerializer(serializers.ModelSerializer):
             email_address=validated_data["email"],
             phone_number=validated_data["phone_number"],
         )
+
+        default_group, created = Group.objects.get_or_create(name="default")
+        user.groups.add(default_group)
+
+        return user
+
+
+class VendorSerializer(serializers.ModelSerializer):
+    pass
