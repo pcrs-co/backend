@@ -5,7 +5,7 @@ import ApproachSelection from '../features/ApproachSelection.jsx'
 import Footer from '../layout/Footer.jsx'
 
 
-function HomePage() {
+function Home() {
 
   return (
     <>
@@ -39,4 +39,4 @@ function HomePage() {
   )
 }
 
-export default HomePage
+export default Home

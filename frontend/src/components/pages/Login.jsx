@@ -1,12 +1,12 @@
-import NavigationBar from '../features/NavigationBar.jsx'
+import Header from '../layout/Header.jsx'
 import styles from '../../styles/pages/LoginPage.module.css'
 import Footer from '../layout/Footer.jsx'
 
-function LoginPage() {
+function Login() {
 
     return (
         <>
-            <NavigationBar />
+            <Header />
 
             <div className={styles.loginContainer}>
                 <h1>Login</h1>
@@ -31,3 +31,5 @@ function LoginPage() {
         </>
     )
 }
+
+export default Login
