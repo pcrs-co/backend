@@ -1,4 +1,4 @@
-import NavigationBar from '../features/NavigationBar.jsx'
+import Header from '../layout/Header.jsx'
 import styles from '../../styles/pages/HomePage.module.css'
 import gearIcon from '../../assets/icons/icons8-gear-100.svg'
 import ApproachSelection from '../features/ApproachSelection.jsx'
@@ -9,7 +9,7 @@ function HomePage() {
 
   return (
     <>
-      <NavigationBar />
+      <Header />
 
       <div className={styles.intro}>
         <div className={styles.introHero}>
