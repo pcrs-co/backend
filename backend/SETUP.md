@@ -1,74 +1,41 @@
-# PCRS Backend Set-Up
+# PCRS Backend Setup
 
-## **NOTE** - Ensure you have Python installed on your system.
+> **Note:** Make sure Python 3 is installed on your system.
 
-To get started, follow the steps below:
+---
 
-### 1. **Create a Virtual Environment**
+## Step 1: Set Up a Virtual Environment
 
-Run the following command (while in project root) to create a virtual environment inside backend folder:
+In the root of the project:
 
 ```bash
 cd backend
-python3 -m venv env
+python3 -m venv venv
 ```
 
-### 2. **Activate the Virtual Environment**
+---
 
-After creating the virtual environment, activate it by running the appropriate command based on your operating system:
+## Step 2: Activate the Virtual Environment
 
-- **On Linux/macOS**:
+Use the appropriate command for your operating system:
 
+- **Linux/macOS:**
   ```bash
   source env/bin/activate
   ```
 
-- **On Windows**:
-
+- **Windows:**
   ```bash
   .\env\Scripts\activate
   ```
 
-Once activated, your shell prompt should change, showing the virtual environment's name in parentheses (e.g., `(env)`).
+You should now see `(env)` in your terminal prompt.
 
-### 3. **Install Project Dependencies**
+---
 
-After activating the virtual environment, install the necessary dependencies:
+## Step 3: Install Dependencies
 
-```bash
-pip install -r requirements.txt
-```
-
-## **NOTE**
-
-If you encounter an error while installing project dependencies, it might be because MySQL client libraries are missing. To fix this, follow the instructions below for your operating system:
-
-### **For Linux**
-
-- **Ubuntu/Debian-based systems:**
-
-  ```bash
-  sudo apt-get update
-  sudo apt-get install libmysqlclient-dev
-  ```
-
-- **Fedora/RHEL-based systems:**
-
-  ```bash
-  sudo dnf install mariadb-devel
-  ```
-
-- **Arch/Manjaro-based systems:**
-
-  ```bash
-  sudo pacman -S mariadb
-  ```
-
-### **For Windows**
-
-If you encounter issues on Windows, ensure that the necessary MySQL or MariaDB client libraries are installed. You can download the MySQL Connector/C from [here](https://dev.mysql.com/downloads/connector/c/), and then install it by following the instructions provided on the site.
-
-Once installed, retry the dependency installation using:
+With the virtual environment activated, run:
 
 ```bash
 pip install -r requirements.txt
@@ -76,26 +43,67 @@ pip install -r requirements.txt
 
 ---
 
-### 5. **SETTING UP THE DATABASE**
-  ```bash
-  mariadb -u root -p
-  ```
-  Enter your password
+## Fix: MySQL Client Error
 
+If you get an error related to MySQL during installation, install the necessary development libraries:
+
+- **Ubuntu/Debian:**
   ```bash
-  CREATE DATABASE pcrs;
-  CREATE USER 'pcrs'@'localhost' IDENTIFIED BY 'Pcrs@password3';
-  GRANT ALL PRIVILEGES ON pcrs.* TO 'pcrs'@'localhost';
-  FLUSH PRIVILEGES;
+  sudo apt update
+  sudo apt install libmysqlclient-dev
   ```
 
-### 6. **RUNNING THE BACKEND**
+- **Fedora/RHEL:**
+  ```bash
+  sudo dnf install mariadb-devel
+  ```
+
+- **Arch/Manjaro:**
+  ```bash
+  sudo pacman -S mariadb
+  ```
+
+- **Windows:**
+  Download and install the [MySQL Connector/C](https://dev.mysql.com/downloads/connector/c/), then try installing dependencies again:
+
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+---
+
+## Step 4: Set Up the Database
+
+Log in as the root user:
 
 ```bash
-  python3 manage.py makemigrations
-  python3 manage.py migrate
-  ```
+sudo mariadb -u root -p
+```
 
-With these steps, you should be able to set up and run the project. If you have any issues or need further assistance, feel free to reach out.
+Then run the following commands in the MariaDB shell:
 
-### Go on with [contributing](../CONTRIBUTING.md)!
+```sql
+CREATE DATABASE pcrs;
+CREATE USER 'pcrs'@'localhost' IDENTIFIED BY 'Pcrs@password3';
+GRANT ALL PRIVILEGES ON pcrs.* TO 'pcrs'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+---
+
+## Step 5: Run Migrations
+
+Still inside the virtual environment, run the following:
+
+```bash
+python3 manage.py makemigrations
+python3 manage.py migrate
+```
+
+---
+
+Your backend setup is now complete.
+
+Refer to the [contributing guide](../CONTRIBUTING.md) for next steps or development instructions.
+
