@@ -64,11 +64,13 @@ If you get an error related to MySQL during installation, install the necessary 
   ```
 
 - **Windows:**
-  Download and install the [MySQL Connector/C](https://dev.mysql.com/downloads/connector/c/), then try installing dependencies again:
+  Download and install the [MySQL Connector/C](https://dev.mysql.com/downloads/connector/c/)
+  
+Then try installing dependencies again:
 
-  ```bash
-  pip install -r requirements.txt
-  ```
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
