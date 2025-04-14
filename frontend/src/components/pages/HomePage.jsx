@@ -1,4 +1,4 @@
-import NavigationBar from '../layout/NavigationBar.jsx'
+import NavigationBar from '../features/NavigationBar.jsx'
 import styles from '../../styles/pages/HomePage.module.css'
 import gearIcon from '../../assets/icons/icons8-gear-100.svg'
 import ApproachSelection from '../features/ApproachSelection.jsx'
