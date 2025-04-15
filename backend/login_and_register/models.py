@@ -7,6 +7,8 @@ class CustomUser(AbstractUser):
     middle_name = models.CharField(max_length=100, blank=True, null=True)
     date_of_birth = models.DateField()
     phone_number = models.CharField(max_length=20, unique=True)
+    region = models.CharField(max_length=30, blank=True, null=True)
+    district = models.CharField(max_length=50, blank=True, null=True)
 
     REQUIRED_FIELDS = [
         "first_name",
@@ -14,6 +16,7 @@ class CustomUser(AbstractUser):
         "phone_number",
         "email",
         "date_of_birth",
+        "region",
     ]
 
     def __str__(self):
