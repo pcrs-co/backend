@@ -24,6 +24,14 @@ function Register() {
                             type="tel"
                             placeholder="Phone Number"
                         />
+                        <input
+                            type="date"
+                            placeholder="Date Of Birth"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Region"
+                        />
                         <input 
                             type="password" 
                             placeholder="Password" 
