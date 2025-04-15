@@ -1,8 +1,10 @@
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../../utils/constants.js'
+import AppToastContainer from '../features/Toastcontainer.jsx'
 import styles from '../../styles/pages/LoginPage.module.css'
 import { useNavigate } from "react-router-dom"
 import Header from '../layout/Header.jsx'
 import Footer from '../layout/Footer.jsx'
+import { toast } from 'react-toastify'
 import { useState } from 'react'
 import api from '../utils/api'
 
@@ -12,9 +14,6 @@ function Login() {
     const [username, setUsername] = useState("")
     const [password, setPassword] = useState("")
 
-    // State variable to store any error messages
-    const [error, setError] = useState(null)
-
     // Use the useNavigate hook to get the navigate function
     const navigate = useNavigate()
 
@@ -23,8 +22,9 @@ function Login() {
         // Prevent the default form submission behavior
         e.preventDefault()
 
-        // Reset the error message
-        setError(null)
+        if (!username || !password) {
+            toast.error("Username and Password are required")
+        }
 
         try {
             // Make a POST request to the server to log in the user
@@ -34,12 +34,14 @@ function Login() {
             localStorage.setItem(ACCESS_TOKEN, response.data.access)
             localStorage.setItem(REFRESH_TOKEN, response.data.refresh)
 
+            toast.success("Login successful!")
+
             // Redirect the user to the home page or dashboard
             navigate("/")
-        } catch (err) {
+        } catch (error) {
             // Catch any errors and display an error message
-            console.error("Login error:", err)
-            setError("Invalid Username or Password")
+            console.error("Login error:", error)
+            toast.error("Invalid Credentials. Please try again.")
         }
     }
 
@@ -68,8 +70,6 @@ function Login() {
                         Login
                     </button>
                 </form>
-
-                {error && <p style={{ color: "red" }}>{error}</p>}
             </div>
 
             <Footer />
