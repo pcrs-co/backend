@@ -49,7 +49,6 @@ function Login() {
     return (
         <>
             <AppToastContainer />
-            <Header />
 
             <div /* className={styles.loginContainer} */>
                 <h1>Login</h1>

@@ -62,11 +62,10 @@ function Register() {
     return (
         <>
             <AppToastContainer />
-            <Header />
 
-            <div className={styles.registerContainer}>
+            <div /* className={styles.registerContainer} */>
                 <h1>Register</h1>
-                <form className={styles.registerForm} onSubmit={handleSubmit}>
+                <form /* className={styles.registerForm} */ onSubmit={handleSubmit}>
                     <input type="text" placeholder="First Name" value={first_name} onChange={e => setFirst_name(e.target.value)} />
                     <input type="text" placeholder="Last Name" value={last_name} onChange={e => setLast_name(e.target.value)} />
                     <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />

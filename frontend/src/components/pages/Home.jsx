@@ -9,7 +9,6 @@ function Home() {
 
   return (
     <>
-      <Header />
 
       <div className={styles.intro}>
         <div className={styles.introHero}>
