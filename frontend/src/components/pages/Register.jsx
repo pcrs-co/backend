@@ -20,6 +20,10 @@ function Register() {
                             type="email" 
                             placeholder="Email" 
                         />
+                        <input
+                            type="tel"
+                            placeholder="Phone Number"
+                        />
                         <input 
                             type="password" 
                             placeholder="Password" 
