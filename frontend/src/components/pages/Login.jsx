@@ -48,7 +48,6 @@ function Login() {
     // Render the Login component
     return (
         <>
-            <AppToastContainer />
 
             <div /* className={styles.loginContainer} */>
                 <h1>Login</h1>
