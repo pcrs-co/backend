@@ -17,6 +17,10 @@ npm install
 npm install axios react-router-dom jwt-decode
 ```
 
+```bash
+npm install react-toastify
+```
+
 
 if warning errors of old verion occur do the following:
 
