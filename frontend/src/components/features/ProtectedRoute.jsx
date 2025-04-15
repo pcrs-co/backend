@@ -2,7 +2,7 @@ import { REFRESH_TOKEN, ACCESS_TOKEN } from "./constants"
 import { Navigate } from "react-router-dom"
 import { jwtDecode } from "jwt-decode"
 import { useState, useEffect } from "react"
-import api from '../api'
+import api from '../utils/api'
 
 // This component is used to protect routes from unauthorized access
 function ProtectedRoute({ children }) {
