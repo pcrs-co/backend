@@ -10,9 +10,9 @@ function NavigationBar() {
             <header className={styles.navigationBar}>
 
                 <div className={styles.siteLogo}>
-                    <a href="/home">
+                    <Link to="/home">
                     <h3>PCRS</h3>
-                    </a>
+                    </Link>
                 </div>
 
                 <div className={styles.authLinks}>
