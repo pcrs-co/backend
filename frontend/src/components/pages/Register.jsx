@@ -1,5 +1,5 @@
 import Header from '../layout/Header.jsx'
-import styles from '../../styles/pages/RegisterPage.module.css'
+// import styles from '../../styles/pages/RegisterPage.module.css'
 import Footer from '../layout/Footer.jsx'
 
 function Register() {
