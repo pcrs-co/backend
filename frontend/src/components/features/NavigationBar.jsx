@@ -1,6 +1,6 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import styles from '../../styles/layout/NavigationBar.module.css'
-import searchIcon from '../../assets/icons/icons8-search.svg'
+// import searchIcon from '../../assets/icons/icons8-search.svg'
 
 
 function NavigationBar() {
@@ -31,8 +31,8 @@ function NavigationBar() {
                             <img src={searchIcon} className={styles.searchIcon}/>
                         </button> */}
                     </div>
-                    <a href="/register">Sign Up</a> | 
-                    <a href="/login">Login</a>                 
+                    <Link to="/register">Sign Up</Link> | 
+                    <Link to="/login">Login</Link>                 
                 </div>
                 
             </header>

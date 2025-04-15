@@ -51,10 +51,10 @@ function Login() {
             <AppToastContainer />
             <Header />
 
-            <div className={styles.loginContainer}>
+            <div /* className={styles.loginContainer} */>
                 <h1>Login</h1>
 
-                <form className={styles.loginForm} onSubmit={handleSubmit}>
+                <form /* className={styles.loginForm} */ onSubmit={handleSubmit}>
                     <input
                         type="text"
                         placeholder="Username"
