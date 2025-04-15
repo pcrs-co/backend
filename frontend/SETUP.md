@@ -13,6 +13,25 @@ cd frontend
 npm install
 ```
 
+```bash
+npm install axios react-router-dom jwt-decode
+```
+
+
+if warning errors of old verion occur do the following:
+
+```bash
+sudo npm install -g n
+sudo n 22
+```
+
+```bash
+sudo n 22
+```
+
+```bash
+node -v
+```
 ---
 
 ## Step 2: Start the Development Server
