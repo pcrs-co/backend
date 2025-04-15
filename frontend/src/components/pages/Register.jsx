@@ -1,5 +1,5 @@
+// import styles from '../../styles/pages/RegisterPage.module.css'
 import AppToastContainer from '../features/Toastcontainer.jsx'
-import styles from '../../styles/pages/RegisterPage.module.css'
 import { useNavigate } from "react-router-dom"
 import Header from '../layout/Header.jsx'
 import Footer from '../layout/Footer.jsx'

@@ -1,5 +1,7 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import styles from '../../styles/layout/NavigationBar.module.css'
 import searchIcon from '../../assets/icons/icons8-search.svg'
+
 
 function NavigationBar() {
 
