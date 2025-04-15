@@ -6,7 +6,7 @@ import Header from '../layout/Header.jsx'
 import Footer from '../layout/Footer.jsx'
 import { toast } from 'react-toastify'
 import { useState } from 'react'
-import api from '../../utils/api.js'
+import api from '../utils/api'
 
 // The Login component handles user login
 function Login() {
