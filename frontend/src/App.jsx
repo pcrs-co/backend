@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import AppToastContainer from '../features/Toastcontainer.jsx'
+import AppToastContainer from './components/features/Toastcontainer'
 import Register from './components/pages/Register'
 import NotFound from './components/pages/NotFound'
 import Header from './components/layout/Header'

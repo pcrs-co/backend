@@ -1,12 +1,12 @@
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../../utils/constants.js'
-import AppToastContainer from '../features/Toastcontainer.jsx'
 // import styles from '../../styles/pages/LoginPage.module.css'
+import AppToastContainer from '../features/Toastcontainer.jsx'
 import { useNavigate } from "react-router-dom"
 import Header from '../layout/Header.jsx'
 import Footer from '../layout/Footer.jsx'
 import { toast } from 'react-toastify'
-import { useState } from 'react'
 import api from '../../utils/api.js'
+import { useState } from 'react'
 
 // The Login component handles user login
 function Login() {
