@@ -1,11 +1,10 @@
 import { ACCESS_TOKEN, REFRESH_TOKEN } from "../../utils/constants.js";
 // import styles from '../../styles/pages/LoginPage.module.css'
 import { useNavigate } from "react-router-dom";
-import Header from "../layout/Header.jsx";
-import Footer from "../layout/Footer.jsx";
 import { toast } from "react-toastify";
 import api from "../../utils/api.js";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 // The Login component handles user login
 function Login() {
@@ -75,10 +74,19 @@ function Login() {
           <button className="btn btn-outline-secondary mb-3 mt-3" type="submit">
             Login
           </button>
+          <div>
+            <Link
+              to="/register"
+              style={{ color: "#0d6efd" }}
+              className="text-decoration-none"
+              onMouseOver={(e) => (e.target.style.color = "#0b5ed7")}
+              onMouseOut={(e) => (e.target.style.color = "#0d6efd")}
+            >
+              Don't have an account?
+            </Link>
+          </div>
         </form>
       </div>
-
-      <Footer />
     </>
   );
 }

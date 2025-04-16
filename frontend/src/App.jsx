@@ -3,6 +3,7 @@ import AppToastContainer from './components/features/Toastcontainer'
 import Register from './components/pages/Register'
 import NotFound from './components/pages/NotFound'
 import Header from './components/layout/Header'
+import Footer from './components/layout/Footer'
 import Login from './components/pages/Login'
 import Home from './components/pages/Home'
 import React, { useEffect } from 'react'
@@ -33,6 +34,7 @@ function App() {
         <Route path="/register" element={<RegisterAndLogout />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <Footer />
     </BrowserRouter>
   )
 }

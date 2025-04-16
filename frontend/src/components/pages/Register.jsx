@@ -2,9 +2,9 @@
 import { useState, useRef, useEffect } from "react";
 import intlTelInput from "intl-tel-input";
 import { useNavigate } from "react-router-dom";
-import Footer from "../layout/Footer.jsx";
 import { toast } from "react-toastify";
 import api from "../../utils/api.js";
+import { Link } from "react-router-dom";
 
 // Register component for user registration
 function Register() {
@@ -13,7 +13,7 @@ function Register() {
   const [last_name, setLast_name] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const phoneInputRef = useRef(null)
+  const phoneInputRef = useRef(null);
   const itiRef = useRef(null); // ✅ ADDED: to hold intlTelInput instance
   const [date_of_birth, setDate_of_birth] = useState("");
   const [region, setRegion] = useState("");
@@ -23,19 +23,20 @@ function Register() {
 
   useEffect(() => {
     if (phoneInputRef.current) {
-      itiRef.current = intlTelInput(phoneInputRef.current, { // 🔧 UPDATED
-        initialCountry: 'auto',
+      itiRef.current = intlTelInput(phoneInputRef.current, {
+        // 🔧 UPDATED
+        initialCountry: "auto",
         geoIpLookup: function (callback) {
-          fetch('https://ipinfo.io/json?token=YOUR_TOKEN_HERE')
+          fetch("https://ipinfo.io/json?token=YOUR_TOKEN_HERE")
             .then((resp) => resp.json())
             .then((resp) => callback(resp.country))
-            .catch(() => callback('us'));
+            .catch(() => callback("us"));
         },
         nationalMode: false,
         separateDialCode: false,
-        preferredCountries: ['us', 'gb', 'ke'],
+        preferredCountries: ["us", "gb", "ke"],
         utilsScript:
-          'https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/utils.js',
+          "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/utils.js",
       });
     }
   }, []);
@@ -47,7 +48,8 @@ function Register() {
     e.preventDefault(); // Prevent default form submission
 
     // 🔧 UPDATED: Use local `itiRef.current` safely
-    const fullPhoneNumber = itiRef.current?.getNumber() || phoneInputRef.current?.value;
+    const fullPhoneNumber =
+      itiRef.current?.getNumber() || phoneInputRef.current?.value;
 
     // Validate input fields
     if (
@@ -61,7 +63,7 @@ function Register() {
       !password ||
       !password2
     ) {
-      toast.error("All fields are required except district");
+      toast.error("Please fill required fields");
       return;
     }
 
@@ -106,17 +108,16 @@ function Register() {
       } else if (error.response.status === 401) {
         toast.error("Registration failed. Please check your inputs.");
       } else {
-        toast.error("Unexpected error occurred!")
+        toast.error("Unexpected error occurred!");
       }
       console.error("Registration error:", error);
     }
-
   };
 
   // Render the registration form
   return (
     <>
-      <div className='container mt-3 mb-3 justify-content-center text-center'>
+      <div className="container mt-3 mb-3 justify-content-center text-center">
         <h2>Register</h2>
         <form onSubmit={handleSubmit}>
           <div className="row mt-3">
@@ -124,7 +125,7 @@ function Register() {
               <input
                 className="form-control"
                 type="text"
-                placeholder="First Name"
+                placeholder="First Name*"
                 value={first_name}
                 onChange={(e) => setFirst_name(e.target.value)}
               />
@@ -133,7 +134,7 @@ function Register() {
               <input
                 className="form-control"
                 type="text"
-                placeholder="Last Name"
+                placeholder="Last Name*"
                 value={last_name}
                 onChange={(e) => setLast_name(e.target.value)}
               />
@@ -144,7 +145,7 @@ function Register() {
               <input
                 className="form-control"
                 type="text"
-                placeholder="Username"
+                placeholder="Username*"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -153,7 +154,7 @@ function Register() {
               <input
                 className="form-control"
                 type="email"
-                placeholder="Email"
+                placeholder="Email*"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -166,14 +167,14 @@ function Register() {
                 ref={phoneInputRef}
                 className="form-control"
                 type="tel"
-                placeholder="Phone Number"
+                placeholder="Phone Number*"
               />
             </div>
             <div className="col">
               <input
                 className="form-control"
                 type="date"
-                placeholder="Date Of Birth"
+                placeholder="Date Of Birth*"
                 value={date_of_birth}
                 onChange={(e) => setDate_of_birth(e.target.value)}
               />
@@ -184,7 +185,7 @@ function Register() {
               <input
                 className="form-control"
                 type="text"
-                placeholder="Region"
+                placeholder="Region*"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
               />
@@ -204,7 +205,7 @@ function Register() {
               <input
                 className="form-control"
                 type="password"
-                placeholder="Password"
+                placeholder="Password*"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -213,19 +214,30 @@ function Register() {
               <input
                 className="form-control"
                 type="password"
-                placeholder="Confirm Password"
+                placeholder="Confirm Password*"
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
               />
             </div>
           </div>
-          <button className="btn btn-outline-secondary mt-3 mb-3" type="submit">Register</button>
+          <button className="btn btn-outline-secondary mt-3 mb-3" type="submit">
+            Register
+          </button>
+          <div>
+            <Link
+              to="/login"
+              style={{ color: "#0d6efd" }}
+              className="text-decoration-none"
+              onMouseOver={(e) => (e.target.style.color = "#0b5ed7")}
+              onMouseOut={(e) => (e.target.style.color = "#0d6efd")}
+            >
+              Already have an account?
+            </Link>
+          </div>
         </form>
       </div>
-      <Footer />
     </>
   );
 }
 
 export default Register;
-
