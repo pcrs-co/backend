@@ -25,9 +25,11 @@ class CustomUser(AbstractUser):
 
 class UserAvatar(models.Model):
     user = models.OneToOneField(
-        CustomUser, on_delete=models.CASCADE, related_name="vendor_profile"
+        CustomUser, on_delete=models.CASCADE, related_name="user_avatar"
     )
     avatar = models.ImageField(upload_to="user_avatar/", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    modified_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.first_name}'s avatar"

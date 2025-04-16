@@ -63,6 +63,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class UserAvatarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserAvatar
+        fields = ["avatar"]
+
+
 class VendorSerializer(serializers.ModelSerializer):
     # Fields from CustomUser
     email = serializers.EmailField()
