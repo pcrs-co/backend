@@ -53,7 +53,7 @@ function Login() {
     return (
         <>
 
-            <div className='container mt-3 mb-3 shadow-lg justify-content-center text-center' /* className={styles.loginContainer} */>
+            <div className='container mt-3 mb-3 shadow-lg justify-content-center text-center w-50' /* className={styles.loginContainer} */>
                 <h2>Login</h2>
 
                 <form /* className={styles.loginForm} */ onSubmit={handleSubmit}>
