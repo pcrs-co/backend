@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppToastContainer from './components/features/Toastcontainer'
 import Register from './components/pages/Register'
 import NotFound from './components/pages/NotFound'
+// import Profile from './components/pages/Profile'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
 import Login from './components/pages/Login'
@@ -31,6 +32,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/logout" element={<Logout />} />
+        {/* <Route path="/profile" element={<Profile />} /> */}
         <Route path="/register" element={<RegisterAndLogout />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -40,3 +42,4 @@ function App() {
 }
 
 export default App
+
