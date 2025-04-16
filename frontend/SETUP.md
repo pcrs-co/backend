@@ -20,6 +20,8 @@ npm install axios react-router-dom jwt-decode
 ```bash
 npm install react-toastify
 npm install bootstrap
+npm install intl-tel-input
+npm install intl-tel-input/build/css/intlTelInput.css
 ```
 
 if warning errors of old verion occur do the following:
