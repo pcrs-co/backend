@@ -116,7 +116,7 @@ function Register() {
   // Render the registration form
   return (
     <>
-      <div className='container mt-3 mb-3 shadow-lg justify-content-center text-center'>
+      <div className='container mt-3 mb-3 justify-content-center text-center'>
         <h2>Register</h2>
         <form onSubmit={handleSubmit}>
           <div className="row mt-3">

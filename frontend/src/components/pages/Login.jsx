@@ -1,86 +1,86 @@
-import { ACCESS_TOKEN, REFRESH_TOKEN } from '../../utils/constants.js'
+import { ACCESS_TOKEN, REFRESH_TOKEN } from "../../utils/constants.js";
 // import styles from '../../styles/pages/LoginPage.module.css'
-import { useNavigate } from "react-router-dom"
-import Header from '../layout/Header.jsx'
-import Footer from '../layout/Footer.jsx'
-import { toast } from 'react-toastify'
-import api from '../../utils/api.js'
-import { useState } from 'react'
+import { useNavigate } from "react-router-dom";
+import Header from "../layout/Header.jsx";
+import Footer from "../layout/Footer.jsx";
+import { toast } from "react-toastify";
+import api from "../../utils/api.js";
+import { useState } from "react";
 
 // The Login component handles user login
 function Login() {
-    // State variables to store the username and password
-    const [username, setUsername] = useState("")
-    const [password, setPassword] = useState("")
+  // State variables to store the username and password
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
-    // Use the useNavigate hook to get the navigate function
-    const navigate = useNavigate()
+  // Use the useNavigate hook to get the navigate function
+  const navigate = useNavigate();
 
-    // Function to handle form submission
-    const handleSubmit = async (e) => {
-        // Prevent the default form submission behavior
-        e.preventDefault()
+  // Function to handle form submission
+  const handleSubmit = async (e) => {
+    // Prevent the default form submission behavior
+    e.preventDefault();
 
-        if (!username || !password) {
-            toast.error("Username and Password are required")
-        }
-
-        try {
-            // Make a POST request to the server to log in the user
-            const response = await api.post("/api/token/", { username, password })
-
-            // Save the access and refresh tokens in local storage
-            localStorage.setItem(ACCESS_TOKEN, response.data.access)
-            localStorage.setItem(REFRESH_TOKEN, response.data.refresh)
-
-            toast.success("Login successful!")
-
-            // Redirect the user to the home page or dashboard
-            navigate("/")
-        } catch (error) {
-            console.error("Login error:", error.response.data);
-            if (!error.response) {
-                toast.error("Server not reachable. Is it running?");
-            } else if (error.response.status === 401) {
-                toast.error("Invalid credentials!");
-            } else {
-                toast.error("Unexpected error occurred!");
-            }
-        }
+    if (!username || !password) {
+      toast.error("Username and Password are required");
     }
 
-    // Render the Login component
-    return (
-        <>
+    try {
+      // Make a POST request to the server to log in the user
+      const response = await api.post("/api/token/", { username, password });
 
-            <div className='container mt-3 mb-3 shadow-lg justify-content-center text-center w-50' /* className={styles.loginContainer} */>
-                <h2>Login</h2>
+      // Save the access and refresh tokens in local storage
+      localStorage.setItem(ACCESS_TOKEN, response.data.access);
+      localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
 
-                <form /* className={styles.loginForm} */ onSubmit={handleSubmit}>
-                    <input
-                        className='form-control'
-                        type="text"
-                        placeholder="Username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                    />
-                    <input
-                        className='form-control mt-3'
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <button className='btn btn-outline-secondary mb-3 mt-3' type="submit">
-                        Login
-                    </button>
-                </form>
-            </div>
+      toast.success("Login successful!");
 
-            <Footer />
-        </>
-    )
+      // Redirect the user to the home page or dashboard
+      navigate("/");
+    } catch (error) {
+      console.error("Login error:", error.response.data);
+      if (!error.response) {
+        toast.error("Server not reachable. Is it running?");
+      } else if (error.response.status === 401) {
+        toast.error("Invalid credentials!");
+      } else {
+        toast.error("Unexpected error occurred!");
+      }
+    }
+  };
+
+  // Render the Login component
+  return (
+    <>
+      <div
+        className="container mt-3 mb-3 justify-content-center text-center w-50" /* className={styles.loginContainer} */
+      >
+        <h2>Login</h2>
+
+        <form /* className={styles.loginForm} */ onSubmit={handleSubmit}>
+          <input
+            className="form-control"
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <input
+            className="form-control mt-3"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button className="btn btn-outline-secondary mb-3 mt-3" type="submit">
+            Login
+          </button>
+        </form>
+      </div>
+
+      <Footer />
+    </>
+  );
 }
 
-export default Login
-
+export default Login;
