@@ -1,6 +1,5 @@
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../../utils/constants.js'
 // import styles from '../../styles/pages/LoginPage.module.css'
-import AppToastContainer from '../features/Toastcontainer.jsx'
 import { useNavigate } from "react-router-dom"
 import Header from '../layout/Header.jsx'
 import Footer from '../layout/Footer.jsx'
@@ -28,7 +27,7 @@ function Login() {
 
         try {
             // Make a POST request to the server to log in the user
-            const response = await api.post("/api/token", { username, password })
+            const response = await api.post("/api/token/", { username, password })
 
             // Save the access and refresh tokens in local storage
             localStorage.setItem(ACCESS_TOKEN, response.data.access)
@@ -39,9 +38,14 @@ function Login() {
             // Redirect the user to the home page or dashboard
             navigate("/")
         } catch (error) {
-            // Catch any errors and display an error message
-            console.error("Login error:", error)
-            toast.error("Invalid Credentials. Please try again.")
+            console.error("Login error:", error.response.data);
+            if (!error.response) {
+                toast.error("Server not reachable. Is it running?");
+            } else if (error.response.status === 401) {
+                toast.error("Invalid credentials!");
+            } else {
+                toast.error("Unexpected error occurred!");
+            }
         }
     }
 
@@ -49,23 +53,25 @@ function Login() {
     return (
         <>
 
-            <div /* className={styles.loginContainer} */>
-                <h1>Login</h1>
+            <div className='container mt-3 mb-3 shadow-lg justify-content-center text-center' /* className={styles.loginContainer} */>
+                <h2>Login</h2>
 
                 <form /* className={styles.loginForm} */ onSubmit={handleSubmit}>
                     <input
+                        className='form-control'
                         type="text"
                         placeholder="Username"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                     />
                     <input
+                        className='form-control mt-3'
                         type="password"
                         placeholder="Password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                     />
-                    <button type="submit">
+                    <button className='btn btn-outline-secondary mb-3 mt-3' type="submit">
                         Login
                     </button>
                 </form>

@@ -1,8 +1,13 @@
-import { ACCESS_TOKEN } from "./constants"
-import axios from "axios"
+import { ACCESS_TOKEN } from "./constants";
+import axios from "axios";
 
+const DEFAULT_API_URL = "http://localhost:8000"; // Your local dev server
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL
+    baseURL: import.meta.env.VITE_API_URL || DEFAULT_API_URL,
+    headers: {
+        "Content-Type": "application/json",
+    },
+    withCredentials: false, // only set to true if backend supports sessions/cookies
 });
 
 api.interceptors.request.use(
@@ -13,9 +18,7 @@ api.interceptors.request.use(
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-export default api
+export default api;

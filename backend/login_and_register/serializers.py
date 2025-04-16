@@ -15,7 +15,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = [
             "first_name",
-            "middle_name",
             "last_name",
             "date_of_birth",
             "phone_number",
@@ -47,7 +46,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             username=validated_data["username"],
             password=validated_data["password"],
             first_name=validated_data["first_name"],
-            middle_name=validated_data.get("middle_name", ""),
             last_name=validated_data["last_name"],
             region=validated_data["region"],
             district=validated_data["district"],

@@ -19,8 +19,8 @@ npm install axios react-router-dom jwt-decode
 
 ```bash
 npm install react-toastify
+npm install bootstrap
 ```
-
 
 if warning errors of old verion occur do the following:
 
@@ -36,6 +36,7 @@ sudo n 22
 ```bash
 node -v
 ```
+
 ---
 
 ## Step 2: Start the Development Server

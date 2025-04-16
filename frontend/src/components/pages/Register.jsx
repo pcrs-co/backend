@@ -36,7 +36,6 @@ function Register() {
       !phone_number ||
       !date_of_birth ||
       !region ||
-      !district ||
       !password ||
       !password2
     ) {
@@ -69,16 +68,28 @@ function Register() {
       toast.success("Registration successful!");
       navigate("/login");
     } catch (error) {
-      // Handle registration errors
+      if (error.response && error.response.data) {
+        const errors = error.response.data;
+
+        // Loop through all error fields and show them
+        for (const key in errors) {
+          if (Array.isArray(errors[key])) {
+            errors[key].forEach((msg) => toast.error(`${key}: ${msg}`));
+          } else {
+            toast.error(`${key}: ${errors[key]}`);
+          }
+        }
+      } else {
+        toast.error("Registration failed. Please check your inputs.");
+      }
       console.error("Registration error:", error);
-      toast.error("Registration failed. Please check your inputs.");
     }
+
   };
 
   // Render the registration form
   return (
     <>
-      <AppToastContainer />
       <div>
         <h1>Register</h1>
         <form onSubmit={handleSubmit}>
