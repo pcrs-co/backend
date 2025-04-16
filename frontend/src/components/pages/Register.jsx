@@ -1,11 +1,10 @@
 // Import necessary components and libraries
-import AppToastContainer from "../features/Toastcontainer.jsx";
+import { useState, useRef, useEffect } from "react";
+import intlTelInput from "intl-tel-input";
 import { useNavigate } from "react-router-dom";
-import Header from "../layout/Header.jsx";
 import Footer from "../layout/Footer.jsx";
 import { toast } from "react-toastify";
 import api from "../../utils/api.js";
-import { useState } from "react";
 
 // Register component for user registration
 function Register() {
@@ -14,12 +13,32 @@ function Register() {
   const [last_name, setLast_name] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [phone_number, setPhone_number] = useState("");
+  const phoneInputRef = useRef(null)
+  const itiRef = useRef(null); // ✅ ADDED: to hold intlTelInput instance
   const [date_of_birth, setDate_of_birth] = useState("");
   const [region, setRegion] = useState("");
   const [district, setDistrict] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
+
+  useEffect(() => {
+    if (phoneInputRef.current) {
+      itiRef.current = intlTelInput(phoneInputRef.current, { // 🔧 UPDATED
+        initialCountry: 'auto',
+        geoIpLookup: function (callback) {
+          fetch('https://ipinfo.io/json?token=YOUR_TOKEN_HERE')
+            .then((resp) => resp.json())
+            .then((resp) => callback(resp.country))
+            .catch(() => callback('us'));
+        },
+        nationalMode: false,
+        separateDialCode: false,
+        preferredCountries: ['us', 'gb', 'ke'],
+        utilsScript:
+          'https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/utils.js',
+      });
+    }
+  }, []);
 
   const navigate = useNavigate(); // Hook for navigation
 
@@ -27,19 +46,22 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent default form submission
 
+    // 🔧 UPDATED: Use local `itiRef.current` safely
+    const fullPhoneNumber = itiRef.current?.getNumber() || phoneInputRef.current?.value;
+
     // Validate input fields
     if (
       !first_name ||
       !last_name ||
       !username ||
       !email ||
-      !phone_number ||
+      !fullPhoneNumber ||
       !date_of_birth ||
       !region ||
       !password ||
       !password2
     ) {
-      toast.error("All fields are required");
+      toast.error("All fields are required except district");
       return;
     }
 
@@ -56,7 +78,7 @@ function Register() {
         last_name,
         username,
         email,
-        phone_number,
+        phone_number: fullPhoneNumber,
         date_of_birth,
         region,
         district,
@@ -79,8 +101,12 @@ function Register() {
             toast.error(`${key}: ${errors[key]}`);
           }
         }
-      } else {
+      } else if (!error.response) {
+        toast.error("Server not reachable. Is it running?");
+      } else if (error.response.status === 401) {
         toast.error("Registration failed. Please check your inputs.");
+      } else {
+        toast.error("Unexpected error occurred!")
       }
       console.error("Registration error:", error);
     }
@@ -90,70 +116,110 @@ function Register() {
   // Render the registration form
   return (
     <>
-      <div>
-        <h1>Register</h1>
+      <div className='container mt-3 mb-3 shadow-lg justify-content-center text-center'>
+        <h2>Register</h2>
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="First Name"
-            value={first_name}
-            onChange={(e) => setFirst_name(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="Last Name"
-            value={last_name}
-            onChange={(e) => setLast_name(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="tel"
-            placeholder="Phone Number"
-            value={phone_number}
-            onChange={(e) => setPhone_number(e.target.value)}
-          />
-          <input
-            type="date"
-            placeholder="Date Of Birth"
-            value={date_of_birth}
-            onChange={(e) => setDate_of_birth(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="Region"
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="District"
-            value={district}
-            onChange={(e) => setDistrict(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Confirm Password"
-            value={password2}
-            onChange={(e) => setPassword2(e.target.value)}
-          />
-          <button type="submit">Register</button>
+          <div className="row mt-3">
+            <div className="col">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="First Name"
+                value={first_name}
+                onChange={(e) => setFirst_name(e.target.value)}
+              />
+            </div>
+            <div className="col">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="Last Name"
+                value={last_name}
+                onChange={(e) => setLast_name(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="row mt-3">
+            <div className="col">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+            <div className="col">
+              <input
+                className="form-control"
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="row mt-3">
+            <div className="col">
+              <input
+                id="phone"
+                ref={phoneInputRef}
+                className="form-control"
+                type="tel"
+                placeholder="Phone Number"
+              />
+            </div>
+            <div className="col">
+              <input
+                className="form-control"
+                type="date"
+                placeholder="Date Of Birth"
+                value={date_of_birth}
+                onChange={(e) => setDate_of_birth(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="row mt-3">
+            <div className="col">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="Region"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+              />
+            </div>
+            <div className="col">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="District"
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="row mt-3">
+            <div className="col">
+              <input
+                className="form-control"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <div className="col">
+              <input
+                className="form-control"
+                type="password"
+                placeholder="Confirm Password"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+              />
+            </div>
+          </div>
+          <button className="btn btn-outline-secondary mt-3 mb-3" type="submit">Register</button>
         </form>
       </div>
       <Footer />
