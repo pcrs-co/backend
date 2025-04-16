@@ -23,12 +23,22 @@ class CustomUser(AbstractUser):
         return f"{self.first_name} {self.last_name}"
 
 
+class UserAvatar(models.Model):
+    user = models.OneToOneField(
+        CustomUser, on_delete=models.CASCADE, related_name="vendor_profile"
+    )
+    avatar = models.ImageField(upload_to="user_avatar/", null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.first_name}'s avatar"
+
+
 class Vendor(models.Model):
     user = models.OneToOneField(
         CustomUser, on_delete=models.CASCADE, related_name="vendor_profile"
     )
     company_name = models.CharField(max_length=255)
-    logo = models.ImageField(upload_to='vendor_logos/', null=True, blank=True)
+    logo = models.ImageField(upload_to="vendor_logos/", null=True, blank=True)
     location = models.CharField(
         max_length=255
     )  # can be extended with Google Maps API integration
