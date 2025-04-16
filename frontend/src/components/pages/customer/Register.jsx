@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import intlTelInput from "intl-tel-input";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import api from "../../utils/api.js";
+import api from "../../../utils/api.js";
 import { Link } from "react-router-dom";
 
 // Register component for user registration

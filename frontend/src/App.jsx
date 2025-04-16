@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppToastContainer from './components/features/Toastcontainer'
-import Register from './components/pages/Register'
+import Register from './components/pages/customer/Register'
 import NotFound from './components/pages/NotFound'
 // import Profile from './components/pages/Profile'
 import Header from './components/layout/Header'

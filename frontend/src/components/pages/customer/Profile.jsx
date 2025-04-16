@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
-import api from "../../utils/api"
-import { ACCESS_TOKEN } from "../../utils/constants"
+import api from "../../../utils/api"
+import { ACCESS_TOKEN } from "../../../utils/constants"
 
 function Profile () {
     const [username, setUsername] = useState("")
