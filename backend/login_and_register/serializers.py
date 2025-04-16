@@ -50,7 +50,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             region=validated_data["region"],
             district=validated_data["district"],
             date_of_birth=validated_data["date_of_birth"],
-            email_address=validated_data["email"],
+            email=validated_data["email"],
             phone_number=validated_data["phone_number"],
         )
 
