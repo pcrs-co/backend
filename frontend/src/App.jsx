@@ -1,6 +1,26 @@
-// import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-// import AppToastContainer from './components/features/Toastcontainer'
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route
+} from 'react-router-dom'
+import AppToastContainer from './components/features/Toastcontainer'
 // import React, { useEffect } from 'react'
+import Layout from './components/layout/Layout'
+
+// public pages
+import Home from './components/pages/public/Home'
+import Register from './components/pages/public/Register'
+import Login from './components/pages/public/Login'
+import NotFound from '.components/pages/public/NotFound'
+import DeviceDetails from './components/pages/public/DeviceDetails'
+import DeviceList from './components/pages/public/DeviceList'
+import InputBasic from './components/pages/public/InputBasic'
+import InputAdvanced from './components/pages/public/InputAdvanced'
+import Specs from './components/pages/public/Specs'
+import VendorProfile from './components/pages/public/VendorProfile'
+
+// customer pages
+// import Profile from './components/pages/customer/Profile'
 
 // function Logout() {
 //   useEffect(() => {
@@ -18,18 +38,28 @@
 
 function App() {
   return (
-    
-    // <BrowserRouter>
-    //   <AppToastContainer />
-    //   <Routes>
-    //   </Routes>
-    // </BrowserRouter>
 
-    <div className="container mt-5">
-      <h1>Welcome to PCRS</h1>
-      <p>Let's recommend some laptops.</p>
-    </div>  
-    
+    <Router>
+      <AppToastContainer />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="specs" element={<Specs />} />
+          <Route path="devices" element={<DeviceList />} />
+          <Route path="devices/:id" element={<DeviceDetails />} />
+          <Route path="input-basic" element={<InputBasic />} />
+          <Route path="input-advanced" element={<InputAdvanced />} />
+          <Route path="vendor-profile" element={<VendorProfile />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+
+        {/* Auth routes */}
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+      </Routes>
+    </Router>
+
   )
 }
 
