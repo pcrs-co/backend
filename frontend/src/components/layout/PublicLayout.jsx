@@ -3,7 +3,7 @@ import Footer from "./Footer";
 import { Outlet } from "react-router-dom";
 import Container from "react-bootstrap/Container";
 
-const Layout = () => {
+const PublicLayout = () => {
   return (
     <>
       <Header />
@@ -17,4 +17,4 @@ const Layout = () => {
   );
 };
 
-export default Layout;
+export default PublicLayout;

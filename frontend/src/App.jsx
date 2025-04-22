@@ -5,7 +5,7 @@ import {
 } from 'react-router-dom'
 import AppToastContainer from './components/features/Toastcontainer'
 // import React, { useEffect } from 'react'
-import Layout from './components/layout/Layout'
+import PublicLayout from './components/layout/PublicLayout'
 
 // public pages
 import Home from './components/pages/public/Home'
@@ -43,7 +43,7 @@ function App() {
       <AppToastContainer />
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<PublicLayout />}>
           <Route index element={<Home />} />
           <Route path="specs" element={<Specs />} />
           <Route path="devices" element={<DeviceList />} />
