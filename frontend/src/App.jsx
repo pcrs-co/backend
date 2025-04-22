@@ -3,21 +3,21 @@ import {
   Routes,
   Route
 } from 'react-router-dom'
-import AppToastContainer from './components/features/Toastcontainer'
+import AppToastContainer from './features/Toastcontainer'
 // import React, { useEffect } from 'react'
 import PublicLayout from './components/layout/PublicLayout'
 
 // public pages
-import Home from './components/pages/public/Home'
-import Register from './components/pages/public/Register'
-import Login from './components/pages/public/Login'
-import NotFound from '.components/pages/public/NotFound'
-import DeviceDetails from './components/pages/public/DeviceDetails'
-import DeviceList from './components/pages/public/DeviceList'
-import InputBasic from './components/pages/public/InputBasic'
-import InputAdvanced from './components/pages/public/InputAdvanced'
-import Specs from './components/pages/public/Specs'
-import VendorProfile from './components/pages/public/VendorProfile'
+import Home from './pages/public/Home'
+import Register from './pages/public/Register'
+import Login from './pages/public/Login'
+import NotFound from './pages/public/NotFound'
+import DeviceDetails from './pages/public/DeviceDetails'
+import DeviceList from './pages/public/DeviceList'
+import InputBasic from './pages/public/InputBasic'
+import InputAdvanced from './pages/public/InputAdvanced'
+import Specs from './pages/public/Specs'
+import VendorProfile from './pages/public/VendorProfile'
 
 // customer pages
 // import Profile from './components/pages/customer/Profile'
