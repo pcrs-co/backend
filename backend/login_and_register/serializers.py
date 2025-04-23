@@ -65,7 +65,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UserAvatarSerializer(serializers.ModelSerializer):
     class Meta:
-        model = UserAvatar
+        model = CustomUser
         fields = ["avatar"]
 
 
