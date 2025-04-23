@@ -39,7 +39,7 @@ class UserView(APIView):
 
             if avatar_file:
                 # Update or create avatar
-                avatar_obj, created = UserAvatar.objects.get_or_create(user=user)
+                avatar_obj, created = CustomUser.objects.get_or_create(id=user)
                 avatar_obj.avatar = avatar_file
                 avatar_obj.save()
             return Response(
