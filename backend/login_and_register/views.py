@@ -19,3 +19,51 @@ class RegisterView(APIView):
                 status=status.HTTP_201_CREATED,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        serializer = RegisterSerializer(user)
+        return Response(serializer.data)
+
+    def put(self, request):
+        user = request.user
+        serializer = RegisterSerializer(user, data=request.data, partial=True)
+        avatar_file = request.FILES.get("avatar")
+
+        if serializer.is_valid():
+            serializer.save()
+
+            if avatar_file:
+                # Update or create avatar
+                avatar_obj, created = UserAvatar.objects.get_or_create(user=user)
+                avatar_obj.avatar = avatar_file
+                avatar_obj.save()
+            return Response(
+                {"message": "User updated successfully", "user": serializer.data}
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        user = request.user
+        user.delete()
+        return Response(
+            {"message": "User deleted successfully"}, status=status.HTTP_204_NO_CONTENT
+        )
+
+
+class VendorRegisterView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = VendorSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Vendor registered and email sent."},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
