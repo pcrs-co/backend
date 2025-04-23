@@ -9,6 +9,9 @@ class CustomUser(AbstractUser):
     phone_number = models.CharField(max_length=20, unique=True)
     region = models.CharField(max_length=30, blank=True, null=True)
     district = models.CharField(max_length=50, blank=True, null=True)
+    avatar = models.ImageField(upload_to="user_avatar/", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    modified_at = models.DateTimeField(auto_now=True)
 
     REQUIRED_FIELDS = [
         "first_name",
@@ -21,18 +24,6 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
-
-
-class UserAvatar(models.Model):
-    user = models.OneToOneField(
-        CustomUser, on_delete=models.CASCADE, related_name="user_avatar"
-    )
-    avatar = models.ImageField(upload_to="user_avatar/", null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    modified_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.user.first_name}'s avatar"
 
 
 class Vendor(models.Model):
