@@ -1,4 +1,6 @@
+from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics
@@ -67,3 +69,34 @@ class VendorRegisterView(APIView):
                 status=status.HTTP_201_CREATED,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProductView(APIView):
+    """
+    POST: Upload a CSV/Excel/ODS file to create product entries.
+    GET: Retrieve all products for a given vendor.
+    """
+
+    def post(self, request, vendor_id):
+        if "file" not in request.FILES:
+            return Response(
+                {"error": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES["file"]
+        serializer = ProductUploadSerializer(data={"file": file})
+
+        if serializer.is_valid():
+            serializer.save(vendor_id=vendor_id)
+            return Response(
+                {"message": "Products uploaded successfully."},
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request, vendor_id):
+        vendor = get_object_or_404(Vendor, id=vendor_id)
+        products = Product.objects.filter(vendor=vendor)
+        serializer = ProductSerializer(products, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
