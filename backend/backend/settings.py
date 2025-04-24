@@ -66,6 +66,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "login_and_register",
+    "ai_recommender",
+    "vendor",
 ]
 
 MIDDLEWARE = [
