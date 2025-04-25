@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ACCESS_TOKEN } from '../utils/constants';
-import Button from './ReusableButton'; // Adjust the path as necessary
+import Button from './ReusableButton';
 
 function NavigationBar() {
   const token = localStorage.getItem(ACCESS_TOKEN);
@@ -13,7 +13,7 @@ function NavigationBar() {
           <Button to="/profile" variant="outline-light" className="mx-1">
             Profile
           </Button>
-          <Button to="/logout" variant="danger" className="mx-1">
+          <Button variant="danger" className="mx-1" logout>
             Logout
           </Button>
         </>
