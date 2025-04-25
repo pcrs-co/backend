@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { ACCESS_TOKEN } from '../utils/constants';
 
 const Button = ({
   children,
@@ -13,32 +14,43 @@ const Button = ({
   className = '',
   icon = null,
   block = false,
+  logout = false,
 }) => {
+  const navigate = useNavigate();
   const classes = `btn btn-${variant} ${size ? `btn-${size}` : ''} ${block ? 'w-100' : ''} ${className}`;
 
-  // If it's a link (internal)
+  const handleClick = (e) => {
+    if (logout) {
+      e.preventDefault(); // prevent default link or form behavior
+      localStorage.removeItem(ACCESS_TOKEN);
+      navigate('/login'); // or navigate('/')
+    }
+
+    if (onClick) {
+      onClick(e);
+    }
+  };
+
   if (to) {
     return (
-      <Link to={to} className={classes} onClick={onClick}>
+      <Link to={to} className={classes} onClick={handleClick}>
         {icon && <i className={`${icon} me-2`}></i>}
         {children}
       </Link>
     );
   }
 
-  // If it's an external link
   if (href) {
     return (
-      <a href={href} className={classes} onClick={onClick}>
+      <a href={href} className={classes} onClick={handleClick}>
         {icon && <i className={`${icon} me-2`}></i>}
         {children}
       </a>
     );
   }
 
-  // Regular button
   return (
-    <button type={type} className={classes} onClick={onClick}>
+    <button type={type} className={classes} onClick={handleClick}>
       {icon && <i className={`${icon} me-2`}></i>}
       {children}
     </button>
@@ -56,7 +68,7 @@ Button.propTypes = {
   className: PropTypes.string,
   icon: PropTypes.string,
   block: PropTypes.bool,
+  logout: PropTypes.bool,
 };
 
 export default Button;
-
