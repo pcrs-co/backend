@@ -10,11 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.0.2",
+    "@mui/material": "^7.0.2",
     "axios": "^1.8.4",
     "bootstrap": "^5.3.5",
     "intl-tel-input": "^25.3.1",
     "jwt-decode": "^4.0.0",
     "mdb-ui-kit": "^9.0.0",
+    "notistack": "^3.0.2",
     "react": "^19.0.0",
     "react-bootstrap": "^2.10.9",
     "react-dom": "^19.0.0",

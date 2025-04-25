@@ -5,7 +5,10 @@ import {
 } from 'react-router-dom'
 import AppToastContainer from './features/Toastcontainer'
 // import React, { useEffect } from 'react'
+
+// Layouts
 import PublicLayout from './components/layout/PublicLayout'
+import VendorLayout from './components/layout/vendor/VendorLayout';
 
 // public pages
 import Home from './pages/public/Home'
@@ -18,6 +21,12 @@ import InputBasic from './pages/public/InputBasic'
 import InputAdvanced from './pages/public/InputAdvanced'
 import Specs from './pages/public/Specs'
 import VendorProfile from './pages/public/VendorProfile'
+
+// Vendor pages
+import { Dashboard as VendorDashboard } from './pages/vendor/Dashboard';
+import ProductList from './pages/vendor/ProductList';
+import ProductForm from './pages/vendor/ProductForm';
+import ProductDetails from './pages/vendor/ProductDetails';
 
 // customer pages
 // import Profile from './components/pages/customer/Profile'
@@ -53,10 +62,18 @@ function App() {
           <Route path="vendor-profile" element={<VendorProfile />} />
           <Route path="*" element={<NotFound />} />
         </Route>
+          {/* Auth routes */}
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
 
-        {/* Auth routes */}
-        <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Login />} />
+        {/* Vendor Routes */}
+        <Route path="/vendor" element={<VendorLayout />}>
+          <Route path="dashboard" element={<VendorDashboard />} />
+          <Route path="products" element={<ProductList />} />
+          <Route path="products/create" element={<ProductForm />} />
+          <Route path="products/:id" element={<ProductDetails />} />
+        </Route>
+
       </Routes>
     </Router>
 

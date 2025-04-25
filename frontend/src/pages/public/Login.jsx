@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import api from "../../utils/api";
 import { useState, useEffect } from "react";
 import { Input, Ripple, initMDB } from "mdb-ui-kit";
-import Button from "../../features/ReusableButton.jsx"; // <-- using the reusable Button
+import Button from "../../features/ReusableButton.jsx";
 
 function Login() {
   const [username, setUsername] = useState("");
