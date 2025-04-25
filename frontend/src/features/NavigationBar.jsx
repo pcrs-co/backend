@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { ACCESS_TOKEN } from '../utils/constants'
-// import searchIcon from '../../assets/icons/icons8-search.svg'
+import { ACCESS_TOKEN } from '../utils/constants';
+import Button from './ReusableButton'; // Adjust the path as necessary
 
 function NavigationBar() {
   const token = localStorage.getItem(ACCESS_TOKEN);
@@ -10,53 +10,81 @@ function NavigationBar() {
     try {
       authLinks = (
         <>
-          <Link className="text-decoration-none text-light mx-2" to="/profile">
+          <Button to="/profile" variant="outline-light" className="mx-1">
             Profile
-          </Link>
-          <Link className="text-decoration-none text-light mx-2" to="/logout">
+          </Button>
+          <Button to="/logout" variant="danger" className="mx-1">
             Logout
-          </Link>
+          </Button>
         </>
       );
     } catch (e) {
       console.error("Failed to parse user:", e);
       authLinks = (
         <>
-          <Link className="text-decoration-none text-light mx-2" to="/register">
-            Sign Up
-          </Link>
-          <Link className="text-decoration-none text-light mx-2" to="/login">
+          <Button to="/register" variant="outline-light" className="mx-1">
+            Register
+          </Button>
+          <Button to="/login" variant="primary" className="mx-1">
             Login
-          </Link>
+          </Button>
         </>
       );
     }
   } else {
     authLinks = (
       <>
-        <Link className="text-decoration-none text-light mx-2" to="/register">
-          Sign Up
-        </Link>
-        <Link className="text-decoration-none text-light mx-2" to="/login">
+        <Button to="/register" variant="outline-light" className="mx-1">
+          Register
+        </Button>
+        <Button to="/login" variant="primary" className="mx-1">
           Login
-        </Link>
+        </Button>
       </>
     );
   }
 
   return (
     <>
-      <header>
+      <header className="d-flex justify-content-between align-items-center bg-dark text-light p-3 shadow-sm">
         <div>
-          <Link to="/">
-            <h3>PCRS</h3>
+          <Link
+            to="/"
+            className="text-decoration-none d-flex align-items-center"
+          >
+            <h3 className="mb-0">PCRS</h3>
           </Link>
         </div>
 
-        <div>
-          <div>{authLinks}</div>
+        <div className="d-flex gap-2 align-items-center">
+          {authLinks}
         </div>
       </header>
+
+      <style jsx>{`
+        header {
+          background: linear-gradient(135deg, #4e5d6c, #283034);
+          border-bottom: 1px solid #444;
+        }
+
+        h3 {
+          font-family: "Roboto", sans-serif;
+          font-weight: bold;
+          color: #ffffff;
+        }
+
+        @media (max-width: 768px) {
+          header {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          .d-flex {
+            flex-direction: column;
+            gap: 1rem;
+          }
+        }
+      `}</style>
     </>
   );
 }
