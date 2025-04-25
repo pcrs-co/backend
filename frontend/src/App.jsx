@@ -23,7 +23,7 @@ import Specs from './pages/public/Specs'
 import VendorProfile from './pages/public/VendorProfile'
 
 // Vendor pages
-import { Dashboard as VendorDashboard } from './pages/vendor/Dashboard';
+import VendorDashboard from './pages/vendor/Dashboard';
 import ProductList from './pages/vendor/ProductList';
 import ProductForm from './pages/vendor/ProductForm';
 import ProductDetails from './pages/vendor/ProductDetails';
