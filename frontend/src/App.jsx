@@ -25,7 +25,7 @@ import VendorProfile from './pages/public/VendorProfile'
 // Vendor pages
 import VendorDashboard from './pages/vendor/Dashboard';
 import ProductList from './pages/vendor/ProductList';
-import ProductForm from './pages/vendor/ProductForm';
+import { ProductCreate, ProductEdit } from './pages/vendor/ProductForm';
 import ProductDetails from './pages/vendor/ProductDetails';
 
 // customer pages
@@ -67,10 +67,11 @@ function App() {
           <Route path="/login" element={<Login />} />
 
         {/* Vendor Routes */}
-        <Route path="/vendor" element={<VendorLayout />}>
+        <Route path="/vendor/*" element={<VendorLayout />}>
           <Route path="dashboard" element={<VendorDashboard />} />
           <Route path="products" element={<ProductList />} />
-          <Route path="products/create" element={<ProductForm />} />
+          <Route path="products/create" element={<ProductCreate />} />
+          <Route path="products/edit/:id" element={<ProductEdit />} />
           <Route path="products/:id" element={<ProductDetails />} />
         </Route>
 
