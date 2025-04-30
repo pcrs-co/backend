@@ -10,7 +10,7 @@ import random
 import re
 
 
-class RegisterSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         write_only=True, required=True, validators=[validate_password]
     )
@@ -27,6 +27,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "district",
             "email",
             "username",
+            "avatar",
             "password",
             "password2",
         ]
@@ -65,12 +66,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-class UserAvatarSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomUser
-        fields = ["avatar"]
-
-
 class VendorSerializer(serializers.ModelSerializer):
     # Fields from CustomUser
     email = serializers.EmailField()
@@ -90,8 +85,8 @@ class VendorSerializer(serializers.ModelSerializer):
         fields = [
             "company_name",
             "location",
-            "logo",
             "email",
+            "logo",
             "first_name",
             "last_name",
             "username",

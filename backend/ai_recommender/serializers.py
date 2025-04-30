@@ -32,3 +32,10 @@ class UserAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAnswer
         fields = "__all__"
+
+
+class RecommendationInputSerializer(serializers.Serializer):
+    profession = serializers.CharField()
+    primary_activities = serializers.ListField(child=serializers.CharField())
+    technical_level = serializers.ChoiceField(choices=["technical", "non-technical"])
+    budget = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)

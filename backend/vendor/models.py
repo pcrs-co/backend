@@ -3,7 +3,14 @@ from login_and_register.models import *
 
 
 class Product(models.Model):
+    VENDOR_TYPES = [
+        ("laptop", "Laptop"),
+        ("desktop", "Desktop"),
+    ]
+
     name = models.CharField(max_length=255)
+    brand = models.CharField(max_length=255)
+    product_type = models.CharField(max_length=50, choices=VENDOR_TYPES)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     vendor = models.ForeignKey(
         CustomUser, related_name="products", on_delete=models.CASCADE

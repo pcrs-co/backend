@@ -22,6 +22,20 @@ class Application(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
 
 
+class CPUBenchmark(models.Model):
+    cpu = models.CharField(max_length=255)  # "Intel Core i7-9700K"
+    cpu_mark = models.CharField(max_length=255)
+    score = models.IntegerField()
+    price = models.DecimalField(decimal_places=2, max_digits=100000)
+
+
+class GPUBenchmark(models.Model):
+    cpu = models.CharField(max_length=255)  # "NVIDIA RTX 3070"
+    cpu_mark = models.CharField(max_length=255)
+    score = models.IntegerField()
+    price = models.DecimalField(decimal_places=2, max_digits=100000)
+
+
 class ApplicationSystemRequirement(models.Model):
     application = models.ForeignKey(
         Application, on_delete=models.CASCADE, related_name="requirements"
@@ -32,11 +46,26 @@ class ApplicationSystemRequirement(models.Model):
 
     cpu = models.CharField(max_length=255)
     gpu = models.CharField(max_length=255)
+    cpu_score = models.IntegerField()
+    gpu_score = models.IntegerField()
     ram = models.IntegerField(help_text="RAM in GB")
     storage = models.IntegerField(help_text="Storage in GB")
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if self.cpu and not self.cpu_score:
+            cpu_bench = CPUBenchmark.objects.filter(name=self.cpu).first()
+            if cpu_bench:
+                self.cpu_score = cpu_bench.benchmark_score
+
+        if self.gpu and not self.gpu_score:
+            gpu_bench = GPUBenchmark.objects.filter(name=self.gpu).first()
+            if gpu_bench:
+                self.gpu_score = gpu_bench.benchmark_score
+
+        super().save(*args, **kwargs)
 
 
 class UserPreference(models.Model):
@@ -80,3 +109,21 @@ class UserAnswer(models.Model):
 
     def __str__(self):
         return f"{self.question.slug}: {self.answer}"
+
+
+class RecommendationSpecification(models.Model):
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, null=True, blank=True
+    )
+    session_id = models.CharField(
+        max_length=255, null=True, blank=True
+    )  # if not logged in
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    min_cpu_score = models.FloatField()
+    min_gpu_score = models.FloatField()
+    min_ram = models.IntegerField()
+    min_storage = models.IntegerField()
+
+    def __str__(self):
+        return f"Recommendation for {self.user or self.session_id} at {self.created_at}"
