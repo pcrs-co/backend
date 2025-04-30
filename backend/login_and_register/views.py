@@ -80,6 +80,11 @@ class UserManagementView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def get(self, request, user_id):
+        user = get_object_or_404(CustomUser, id=user_id)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+
     def put(self, request, user_id):
         user = get_object_or_404(Vendor, id=user_id)
         serializer = UserSerializer(

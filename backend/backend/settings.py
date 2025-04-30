@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "login_and_register",
     "ai_recommender",
     "vendor",
+    "order",
 ]
 
 MIDDLEWARE = [
