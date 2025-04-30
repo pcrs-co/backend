@@ -27,6 +27,7 @@ import VendorDashboard from './pages/vendor/Dashboard';
 import ProductList from './pages/vendor/ProductList';
 import { ProductCreate, ProductEdit } from './pages/vendor/ProductForm';
 import ProductDetails from './pages/vendor/ProductDetails';
+import VendorOrders from './pages/vendor/VendorOrders';
 
 // customer pages
 // import Profile from './components/pages/customer/Profile'
@@ -73,6 +74,7 @@ function App() {
           <Route path="products/create" element={<ProductCreate />} />
           <Route path="products/edit/:id" element={<ProductEdit />} />
           <Route path="products/:id" element={<ProductDetails />} />
+          <Route path="orders" element={<VendorOrders />} />
         </Route>
 
       </Routes>
