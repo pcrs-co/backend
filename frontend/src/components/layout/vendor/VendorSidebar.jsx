@@ -1,12 +1,29 @@
-import { AppBar } from 'react-admin';
-import { Typography, Box } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { MenuItemLink, useSidebarState } from 'react-admin';
+import { Box, Drawer, List } from '@mui/material';
+import {
+  Dashboard as DashboardIcon,
+  ListAlt as ProductIcon,
+  AddBox as AddProductIcon,
+  Logout as LogoutIcon
+} from '@mui/icons-material';
 
-const VendorAppBar = () => (
-  <AppBar>
-    <Box sx={{ flex: 1, textAlign: 'center' }}>
-      <Typography variant="h6">Vendor Panel</Typography>
-    </Box>
-  </AppBar>
-);
+const VendorSidebar = () => {
+  const navigate = useNavigate();
+  const [open] = useSidebarState();
 
-export default VendorAppBar;
+  return (
+    <Drawer variant="permanent" open={open}>
+      <Box sx={{ width: 250, mt: 2 }}>
+        <List>
+          <MenuItemLink to="/vendor/dashboard" primaryText="Dashboard" leftIcon={<DashboardIcon />} />
+          <MenuItemLink to="/vendor/products" primaryText="My Products" leftIcon={<ProductIcon />} />
+          <MenuItemLink to="/vendor/products/create" primaryText="Add Product" leftIcon={<AddProductIcon />} />
+          <MenuItemLink to="/logout" primaryText="Logout" leftIcon={<LogoutIcon />} />
+        </List>
+      </Box>
+    </Drawer>
+  );
+};
+
+export default VendorSidebar;
