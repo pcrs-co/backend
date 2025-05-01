@@ -22,8 +22,8 @@ class Product(models.Model):
         null=True,
         blank=True,
     )
-    ram = models.ForeignKey(
-        "RAM", related_name="products", on_delete=models.SET_NULL, null=True, blank=True
+    memory = models.ForeignKey(
+        "Memory", related_name="products", on_delete=models.SET_NULL, null=True, blank=True
     )
     storage = models.ForeignKey(
         "Storage",
@@ -46,14 +46,14 @@ class Product(models.Model):
         null=True,
         blank=True,
     )
-    ports_connectivity = models.ForeignKey(
+    ports = models.ForeignKey(
         "PortsConnectivity",
         related_name="products",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
     )
-    power_battery = models.ForeignKey(
+    battery = models.ForeignKey(
         "PowerBattery",
         related_name="products",
         on_delete=models.SET_NULL,
@@ -96,6 +96,7 @@ class Product(models.Model):
 
 
 class Processor(models.Model):
+    data_received = models.CharField(max_length=1000, null=True, blank=True)
     brand = models.CharField(max_length=100, blank=True, null=True)
     model = models.CharField(max_length=100, blank=True, null=True)
     series = models.CharField(max_length=50, blank=True, null=True)
@@ -110,7 +111,8 @@ class Processor(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
 
 
-class RAM(models.Model):
+class Memory(models.Model):
+    data_received = models.CharField(max_length=1000, null=True, blank=True)
     capacity_gb = models.IntegerField(blank=True, null=True)
     type = models.CharField(max_length=50, blank=True, null=True)
     frequency_mhz = models.IntegerField(blank=True, null=True)
@@ -130,6 +132,7 @@ class RAM(models.Model):
 
 
 class Storage(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     type = models.CharField(max_length=50, blank=True, null=True)
     form_factor = models.CharField(max_length=50, blank=True, null=True)
     capacity_gb = models.IntegerField(blank=True, null=True)
@@ -142,6 +145,7 @@ class Storage(models.Model):
 
 
 class Graphic(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     gpu_type = models.CharField(max_length=50, blank=True, null=True)
     brand = models.CharField(max_length=50, blank=True, null=True)
     model = models.CharField(max_length=50, blank=True, null=True)
@@ -152,6 +156,7 @@ class Graphic(models.Model):
 
 
 class Display(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     size_inches = models.FloatField(blank=True, null=True)
     resolution = models.CharField(max_length=50, blank=True, null=True)
     panel_type = models.CharField(max_length=50, blank=True, null=True)
@@ -162,6 +167,7 @@ class Display(models.Model):
 
 
 class PortsConnectivity(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     usb_ports = models.IntegerField(blank=True, null=True)
     video_output = models.CharField(max_length=100, blank=True, null=True)
     ethernet_speed = models.FloatField(blank=True, null=True)
@@ -174,6 +180,7 @@ class PortsConnectivity(models.Model):
 
 
 class PowerBattery(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     battery_capacity_wh = models.FloatField(blank=True, null=True)
     adapter_wattage = models.IntegerField(blank=True, null=True)
     estimated_battery_life_hours = models.FloatField(blank=True, null=True)
@@ -182,6 +189,7 @@ class PowerBattery(models.Model):
 
 
 class Cooling(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     cooling_type = models.CharField(max_length=50, blank=True, null=True)
     fan_count = models.IntegerField(blank=True, null=True)
     cooler_brand = models.CharField(max_length=50, blank=True, null=True)
@@ -190,6 +198,7 @@ class Cooling(models.Model):
 
 
 class OperatingSystem(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     os_name = models.CharField(max_length=50, blank=True, null=True)
     version = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
@@ -197,6 +206,7 @@ class OperatingSystem(models.Model):
 
 
 class FormFactor(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     type = models.CharField(max_length=50, blank=True, null=True)
     dimensions = models.CharField(max_length=50, blank=True, null=True)
     weight = models.FloatField(blank=True, null=True)
@@ -205,10 +215,10 @@ class FormFactor(models.Model):
 
 
 class Extra(models.Model):
+    data_received = models.CharField(max_length=10000, null=True, blank=True)
     keyboard_type = models.CharField(max_length=50, blank=True, null=True)
     has_backlit_keyboard = models.BooleanField(blank=True, null=True)
     webcam_resolution = models.CharField(max_length=50, blank=True, null=True)
     biometrics = models.CharField(max_length=50, blank=True, null=True)
-    mil_std_certified = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
