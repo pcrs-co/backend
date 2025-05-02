@@ -11,9 +11,9 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     brand = models.CharField(max_length=255)
     product_type = models.CharField(max_length=50, choices=VENDOR_TYPES)
-    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price = models.DecimalField(max_digits=65, decimal_places=2, null=True, blank=True)
     vendor = models.ForeignKey(
-        CustomUser, related_name="products", on_delete=models.CASCADE
+        Vendor, related_name="products", on_delete=models.CASCADE
     )
     processor = models.ForeignKey(
         "Processor",
@@ -23,7 +23,11 @@ class Product(models.Model):
         blank=True,
     )
     memory = models.ForeignKey(
-        "Memory", related_name="products", on_delete=models.SET_NULL, null=True, blank=True
+        "Memory",
+        related_name="products",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
     )
     storage = models.ForeignKey(
         "Storage",

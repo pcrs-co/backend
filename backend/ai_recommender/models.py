@@ -26,14 +26,14 @@ class CPUBenchmark(models.Model):
     cpu = models.CharField(max_length=255)  # "Intel Core i7-9700K"
     cpu_mark = models.CharField(max_length=255)
     score = models.IntegerField()
-    price = models.DecimalField(decimal_places=2, max_digits=100000)
+    price = models.DecimalField(decimal_places=2, max_digits=65)
 
 
 class GPUBenchmark(models.Model):
     cpu = models.CharField(max_length=255)  # "NVIDIA RTX 3070"
     cpu_mark = models.CharField(max_length=255)
     score = models.IntegerField()
-    price = models.DecimalField(decimal_places=2, max_digits=100000)
+    price = models.DecimalField(decimal_places=2, max_digits=65)
 
 
 class ApplicationSystemRequirement(models.Model):

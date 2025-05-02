@@ -71,6 +71,8 @@ INSTALLED_APPS = [
     "order",
 ]
 
+INSTALLED_APPS += ["django_extensions"]
+
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
