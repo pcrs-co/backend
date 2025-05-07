@@ -12,9 +12,33 @@ import Dashboard from '../../../pages/admin/Dashboard';
 
 const dataProvider = fakeDataProvider({
   vendors: [
-    { id: 1, name: 'Vendor A' },
-    { id: 2, name: 'Vendor B' },
-  ],
+    {
+      id: 1,
+      company_name: 'Vendor A Ltd.',
+      location: 'City Center, Block 5',
+      email: 'vendorA@example.com',
+      logo: 'https://via.placeholder.com/150',
+      first_name: 'Alice',
+      last_name: 'Anderson',
+      username: 'vendorA',
+      phone_number: '0712345678',
+      region: 'Central',
+      district: 'District 1'
+    },
+    {
+      id: 2,
+      company_name: 'Vendor B Corp.',
+      location: 'Industrial Park, Zone 3',
+      email: 'vendorB@example.com',
+      logo: 'https://via.placeholder.com/150',
+      first_name: 'Bob',
+      last_name: 'Brown',
+      username: 'vendorB',
+      phone_number: '0723456789',
+      region: 'Northern',
+      district: 'District 2'
+    }
+  ],  
   customers: [
     { id: 1, name: 'Customer A' },
     { id: 2, name: 'Customer B' },
