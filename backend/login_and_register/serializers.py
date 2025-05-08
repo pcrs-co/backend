@@ -1,3 +1,4 @@
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group
 from django.core.mail import send_mail
@@ -143,3 +144,20 @@ class VendorSerializer(serializers.ModelSerializer):
         subject = "Your Vendor Account Details"
         message = f"Welcome! Here are your login credentials:\n\nTemporary Password: {password}\n\nPlease log in and change your password."
         send_mail(subject, message, "no-reply@example.com", [to_email])
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+
+        # Check group memberships
+        if user.groups.filter(name="vendor").exists():
+            data["role"] = "vendor"
+        elif user.is_superuser:
+            data["role"] = "admin"
+        else:
+            data["role"] = "user"
+
+        data["username"] = user.username
+        return data
