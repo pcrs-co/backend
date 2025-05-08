@@ -28,9 +28,21 @@ function Login() {
 
       localStorage.setItem(ACCESS_TOKEN, response.data.access);
       localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
+      localStorage.setItem("userRole", response.data.role);
+      localStorage.setItem("username", response.data.username);
 
       toast.success("Login successful!");
-      navigate("/");
+
+      switch (response.data.role) {
+        case "admin":
+          navigate("/admin/dashboard");
+          break;
+        case "vendor":
+          navigate("/vendor/dashboard");
+          break;
+        default:
+          navigate("/");
+      }
     } catch (error) {
       console.error("Login error:", error.response?.data || error.message);
       if (!error.response) {

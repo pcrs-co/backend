@@ -23,6 +23,12 @@ import InputAdvanced from './pages/public/InputAdvanced'
 import Specs from './pages/public/Specs'
 import VendorProfile from './pages/public/VendorProfile'
 
+// admin pages
+import Dashboard from './pages/admin/Dashboard';
+
+//vendor pages
+
+
 // customer pages
 // import Profile from './components/pages/customer/Profile'
 
@@ -57,15 +63,17 @@ function App() {
           <Route path="vendor-profile" element={<VendorProfile />} />
           <Route path="*" element={<NotFound />} />
         </Route>
-          {/* Auth routes */}
-          <Route path="/register" element={<Register />} />
-          <Route path="/login" element={<Login />} />
+        {/* Auth routes */}
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
 
         {/* Vendor Routes */}
+        <Route path="/vendor/*" element={<VendorLayout />} />
         <Route path="/vendor/*" element={<VendorLayout />} />
 
         {/* Admin Routes */}
         <Route path="/admin/*" element={<AdminLayout />} />
+        <Route path="/admin/dashboard" element={<Dashboard />} />
 
       </Routes>
     </Router>
