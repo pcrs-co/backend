@@ -12,6 +12,8 @@ class Product(models.Model):
     brand = models.CharField(max_length=255)
     product_type = models.CharField(max_length=50, choices=VENDOR_TYPES)
     price = models.DecimalField(max_digits=65, decimal_places=2, null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    pending_quantity = models.PositiveIntegerField(default=0)
     vendor = models.ForeignKey(
         Vendor, related_name="products", on_delete=models.CASCADE
     )
