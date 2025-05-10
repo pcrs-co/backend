@@ -69,11 +69,9 @@ function App() {
 
         {/* Vendor Routes */}
         <Route path="/vendor/*" element={<VendorLayout />} />
-        <Route path="/vendor/*" element={<VendorLayout />} />
 
         {/* Admin Routes */}
         <Route path="/admin/*" element={<AdminLayout />} />
-        <Route path="/admin/dashboard" element={<Dashboard />} />
 
       </Routes>
     </Router>

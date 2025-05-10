@@ -1,5 +1,6 @@
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -27,22 +28,13 @@ class VendorManagementView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request, vendor_id=None):
-        if vendor_id:
-            vendor = get_object_or_404(Vendor, id=vendor_id)
-            user = get_object_or_404(CustomUser, id=vendor.user)
-            vendor_data = VendorSerializer(vendor).data
-            user_data = UserSerializer(vendor.user).data
-            combined_data = {"vendor": vendor_data, "user": user_data}
-            return Response(combined_data)
-        else:
-            vendors = Vendor.objects.all()
-            data = []
-            for vendor in vendors:
-                vendor_data = VendorSerializer(vendor).data
-                user_data = UserSerializer(vendor.user).data
-                data.append({"vendor": vendor_data, "user": user_data})
-            return Response(data)
+    def get(self, request, vendor_id):
+        vendor = get_object_or_404(Vendor, id=vendor_id)
+        user = get_object_or_404(CustomUser, id=vendor.user)
+        vendor_data = VendorSerializer(vendor).data
+        user_data = UserSerializer(vendor.user).data
+        combined_data = {"vendor": vendor_data, "user": user_data}
+        return Response(combined_data)
 
     def put(self, request, vendor_id):
         vendor = get_object_or_404(Vendor, id=vendor_id)
@@ -115,6 +107,15 @@ class UserManagementView(APIView):
         return Response(
             {"message": "User deleted successfully"}, status=status.HTTP_204_NO_CONTENT
         )
+
+
+class VendorListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        vendors = Vendor.objects.all().order_by("id")
+        serializer = VendorListSerializer(vendors, many=True)
+        return Response(serializer.data)
 
 
 class UserListView(APIView):

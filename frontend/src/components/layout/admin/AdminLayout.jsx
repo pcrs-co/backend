@@ -1,5 +1,5 @@
 import { Admin, Resource, Layout } from 'react-admin';
-import fakeDataProvider from 'ra-data-fakerest';
+import dataProvider from '../../../utils/dataProvider';
 import AdminSidebar from './AdminSidebar';
 import AdminAppbar from './AdminAppbar';
 
@@ -9,49 +9,6 @@ import CustomerList from '../../../pages/admin/CustomerList';
 import ProductList from '../../../pages/admin/ProductList';
 import OrderList from '../../../pages/admin/OrderList';
 import Dashboard from '../../../pages/admin/Dashboard';
-
-const dataProvider = fakeDataProvider({
-  vendors: [
-    {
-      id: 1,
-      company_name: 'Vendor A Ltd.',
-      location: 'City Center, Block 5',
-      email: 'vendorA@example.com',
-      logo: 'https://via.placeholder.com/150',
-      first_name: 'Alice',
-      last_name: 'Anderson',
-      username: 'vendorA',
-      phone_number: '0712345678',
-      region: 'Central',
-      district: 'District 1'
-    },
-    {
-      id: 2,
-      company_name: 'Vendor B Corp.',
-      location: 'Industrial Park, Zone 3',
-      email: 'vendorB@example.com',
-      logo: 'https://via.placeholder.com/150',
-      first_name: 'Bob',
-      last_name: 'Brown',
-      username: 'vendorB',
-      phone_number: '0723456789',
-      region: 'Northern',
-      district: 'District 2'
-    }
-  ],  
-  customers: [
-    { id: 1, name: 'Customer A' },
-    { id: 2, name: 'Customer B' },
-  ],
-  products: [
-    { id: 1, name: 'Phone X', vendor_id: 1 },
-    { id: 2, name: 'Laptop Y', vendor_id: 2 },
-  ],
-  orders: [
-    { id: 1, customer_id: 1, product_id: 1, status: 'Pending' },
-    { id: 2, customer_id: 2, product_id: 2, status: 'Delivered' },
-  ],
-});
 
 const CustomLayout = (props) => (
   <Layout
@@ -76,9 +33,9 @@ const AdminLayout = () => {
         edit={VendorEdit}
         options={{ label: 'Vendors' }}
       />
-      <Resource name="customers" list={CustomerList} options={{ label: 'Customers' }} />
+      <Resource name="admin" list={CustomerList} options={{ label: 'Customers' }} />
       <Resource name="products" list={ProductList} options={{ label: 'Products' }} />
-      <Resource name="orders" list={OrderList} options={{ label: 'Orders' }} />
+      <Resource name="order" list={OrderList} options={{ label: 'Orders' }} />
     </Admin>
   );
 };

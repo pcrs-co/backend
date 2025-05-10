@@ -161,3 +161,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         data["username"] = user.username
         return data
+
+
+class VendorListSerializer(serializers.ModelSerializer):
+    class Meta:
+        fields = "__all__"
