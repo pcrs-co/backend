@@ -33,7 +33,7 @@ const AdminLayout = () => {
         edit={VendorEdit}
         options={{ label: 'Vendors' }}
       />
-      <Resource name="admin" list={CustomerList} options={{ label: 'Customers' }} />
+      <Resource name="customers" list={CustomerList} options={{ label: 'Customers' }} />
       <Resource name="products" list={ProductList} options={{ label: 'Products' }} />
       <Resource name="order" list={OrderList} options={{ label: 'Orders' }} />
     </Admin>
