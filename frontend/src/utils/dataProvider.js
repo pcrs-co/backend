@@ -1,75 +1,138 @@
-import api from "./api"; // Axios instance with token
-const apiUrl = 'http://localhost:8000/api';
+import api from './api';
+import { ACCESS_TOKEN, REFRESH_TOKEN } from './constants';
 
-const resourceMap = {
-    vendors: 'admin/vendor_list',
-    customers: 'admin/user_list',
-    orders: 'order/list',
-    // Add more mappings as needed
+const RESOURCE_MAP = {
+    customers: 'api/admin/customers/',
+    vendors: 'api/admin/vendors/',
+    products: 'products/',
+    order: 'order/',
 };
 
-const mapResource = (resource) => resourceMap[resource] || resource;
+const getEndpoint = (resource) => RESOURCE_MAP[resource] || `${resource}/`;
+
+const saveToLocalStorage = (key, value) => localStorage.setItem(key, value);
+const getFromLocalStorage = (key) => localStorage.getItem(key);
+const removeFromLocalStorage = (keys) => keys.forEach((k) => localStorage.removeItem(k));
+
+const formatError = (error) => {
+    const detail = error.response?.data?.detail || error.response?.data?.message;
+    return new Error(detail || error.message || 'Request failed');
+};
+
+const ensureArrayData = (data) => {
+    if (Array.isArray(data?.results)) return data.results;
+    if (Array.isArray(data)) return data;
+    return data && typeof data === 'object' ? [data] : [];
+};
 
 const dataProvider = {
-    // GET many records: /api/resource/
-    getList: async (resource, params) => {
-        const url = `${apiUrl}/${mapResource(resource)}`;
-        const response = await api.get(url);
+    login: async ({ username, password }) => {
+        try {
+            const { data } = await api.post('/api/token/', { username, password });
 
-        const data = response.data;
+            saveToLocalStorage(ACCESS_TOKEN, data.access);
+            saveToLocalStorage(REFRESH_TOKEN, data.refresh);
+            saveToLocalStorage('userRole', data.role || 'user');
+            saveToLocalStorage('username', data.username || username);
 
-        return {
-            data: Array.isArray(data.results) ? data.results : data,
-            total: data.count || data.length || data.results?.length || 0,
-        };
+            return { data };
+        } catch (error) {
+            throw formatError(error);
+        }
     },
 
-    // GET one record by ID: /api/resource/:id/
-    getOne: async (resource, params) => {
-        const url = `${apiUrl}/${mapResource(resource)}/${params.id}/`;
-        const response = await api.get(url);
-        return { data: response.data };
+    logout: () => {
+        removeFromLocalStorage([ACCESS_TOKEN, REFRESH_TOKEN, 'userRole', 'username']);
+        return Promise.resolve({ data: { success: true } });
     },
 
-    // POST (create) one: /api/resource/
-    create: async (resource, params) => {
-        const url = `${apiUrl}/${mapResource(resource)}/`;
-        const response = await api.post(url, params.data);
-        return { data: response.data };
+    checkAuth: () => getFromLocalStorage(ACCESS_TOKEN) ? Promise.resolve() : Promise.reject(),
+
+    checkError: (error) => {
+        if ([401, 403].includes(error?.status)) {
+            return dataProvider.logout().then(() => Promise.reject());
+        }
+        return Promise.resolve();
     },
 
-    // PUT (update): /api/resource/:id/
-    update: async (resource, params) => {
-        const url = `${apiUrl}/${mapResource(resource)}/${params.id}/`;
-        const response = await api.put(url, params.data);
-        return { data: response.data };
+    getIdentity: () => {
+        try {
+            const username = getFromLocalStorage('username');
+            const role = getFromLocalStorage('userRole');
+            return Promise.resolve({
+                data: { id: username, fullName: username, avatar: null, role },
+            });
+        } catch (error) {
+            throw formatError(error);
+        }
     },
 
-    // DELETE one: /api/resource/:id/
-    delete: async (resource, params) => {
-        const url = `${apiUrl}/${mapResource(resource)}/${params.id}/`;
-        await api.delete(url);
-        return { data: { id: params.id } };
+    getList: async (resource, { pagination, sort, filter }) => {
+        const { page, perPage } = pagination;
+        const { field, order } = sort;
+        const endpoint = getEndpoint(resource);
+
+        try {
+            const { data } = await api.get(endpoint, {
+                params: {
+                    page,
+                    per_page: perPage,
+                    ordering: order === 'ASC' ? field : `-${field}`,
+                    ...filter,
+                },
+            });
+
+            const results = ensureArrayData(data);
+            const total = data.count || results.length;
+            return { data: results, total };
+        } catch (error) {
+            throw formatError(error);
+        }
     },
 
-    // Optional: GET many by ID array
-    getMany: async (resource, params) => {
-        const responses = await Promise.all(
-            params.ids.map((id) => api.get(`${apiUrl}/${mapResource(resource)}/${id}/`))
-        );
-        return {
-            data: responses.map((res) => res.data),
-        };
+    getOne: async (resource, { id }) => {
+        try {
+            const { data } = await api.get(`${getEndpoint(resource)}${id}/`);
+            return { data };
+        } catch (error) {
+            throw formatError(error);
+        }
     },
 
-    // 🔁 Optional: GET related records (reference field)
-    getManyReference: async (resource, params) => {
-        const url = `${apiUrl}/${mapResource(resource)}?${params.target}=${params.id}`;
-        const response = await api.get(url);
-        return {
-            data: response.data.results || response.data,
-            total: response.data.count || response.data.length || 0,
-        };
+    create: async (resource, { data }) => {
+        try {
+            const res = await api.post(getEndpoint(resource), data);
+            return { data: res.data };
+        } catch (error) {
+            throw formatError(error);
+        }
+    },
+
+    update: async (resource, { id, data }) => {
+        try {
+            const res = await api.patch(`${getEndpoint(resource)}${id}/`, data);
+            return { data: res.data };
+        } catch (error) {
+            throw formatError(error);
+        }
+    },
+
+    delete: async (resource, { id }) => {
+        try {
+            await api.delete(`${getEndpoint(resource)}${id}/`);
+            return { data: { id } };
+        } catch (error) {
+            throw formatError(error);
+        }
+    },
+
+    deleteMany: async (resource, { ids }) => {
+        try {
+            await Promise.all(ids.map(id => api.delete(`${getEndpoint(resource)}${id}/`)));
+            return { data: ids };
+        } catch (error) {
+            throw formatError(error);
+        }
     },
 };
 
