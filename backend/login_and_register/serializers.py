@@ -147,18 +147,19 @@ class VendorSerializer(serializers.ModelSerializer):
             subject = "Your Vendor Account Credentials"
             message = f"Welcome! Your temporary password: {password}"
             from_email = "noreply@yourdomain.com"
-            
+
             send_mail(
                 subject,
                 message,
                 from_email,
                 [email],
-                fail_silently=False  # Set to True in production if you want to ignore errors
+                fail_silently=False,  # Set to True in production if you want to ignore errors
             )
         except Exception as e:
             print(f"Failed to send email: {e}")
             # You can log this error to your error tracking system
             # or queue it for retry later
+
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
