@@ -9,6 +9,38 @@ import string
 import random
 import re
 
+class QuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = "__all__"
+
+class CPUBenchmarkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CPUBenchmark
+        fields = "__all__"
+
+class GPUBenchmarkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GPUBenchmark
+        fields = "__all__"
+
+class ActivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Activity
+        fields = "__all__"
+
+class ApplicationSystemRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ApplicationSystemRequirement
+        fields = "__all__"
+
+class ApplicationSerializer(serializers.ModelSerializer):
+    requirements = ApplicationSystemRequirementSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Application
+        fields = "__all__"
+
 
 class UserPreferenceSerializer(serializers.ModelSerializer):
     activities = serializers.ListField(child=serializers.CharField(), write_only=True)
