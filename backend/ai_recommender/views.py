@@ -1,10 +1,11 @@
-from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import ValidationError
-from rest_framework.response import Response
 from rest_framework import status, viewsets, generics
-from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.views import APIView
+from django.db.models import Q, F
 from django.db import transaction
 from vendor.serializers import *
 from vendor.models import *
@@ -174,114 +175,210 @@ class UserPreferenceView(generics.CreateAPIView):
 
 
 class RecommenderView(APIView):
-    permission_classes = [AllowAny]
+    def post(self, request):
+        # Step 1: Determine if user is logged in
+        user = request.user if request.user.is_authenticated else None
+        session_id = request.data.get("session_id")  # For guest users
 
-    def post(self, request, *args, **kwargs):
-        activities = request.data.get("activities", [])
-        raw_budget = request.data.get("budget")
+        if not user and not session_id:
+            return Response(
+                {"error": "User not logged in and session_id missing."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if not activities:
-            raise ValidationError("Activities are required.")
-
+        # Step 2: Fetch the latest UserPreference (based on user or session_id)
         try:
-            budget = float(raw_budget) if raw_budget is not None else None
-            if budget is not None and budget < 0:
-                raise ValidationError("Budget must be positive.")
-        except (ValueError, TypeError):
-            raise ValidationError("Budget must be a valid number.")
-
-        applications = Application.objects.filter(activity__name__in=activities)
-        if not applications.exists():
+            if user:
+                preference = UserPreference.objects.filter(user=user).latest(
+                    "created_at"
+                )
+            else:
+                preference = UserPreference.objects.filter(
+                    session_id=session_id
+                ).latest("created_at")
+        except UserPreference.DoesNotExist:
             return Response(
-                {"error": "No applications found for selected activities."},
+                {"error": "No user preferences found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        max_cpu_score = max_gpu_score = max_ram = max_storage = 0
+        # Step 3: Get all applications linked to selected activities
+        applications = Application.objects.filter(
+            activity__in=preference.activities.all()
+        )
 
-        for app in applications:
-            requirements = ApplicationSystemRequirement.objects.filter(application=app)
-            for req in requirements:
-                max_cpu_score = max(max_cpu_score, req.cpu_score or 0)
-                max_gpu_score = max(max_gpu_score, req.gpu_score or 0)
-                max_ram = max(max_ram, req.ram or 0)
-                max_storage = max(max_storage, req.storage or 0)
+        # Step 4: Gather all "recommended" requirements from those applications
+        all_requirements = ApplicationSystemRequirement.objects.filter(
+            application__in=applications, type="recommended"
+        )
 
-        if max_cpu_score == max_gpu_score == max_ram == max_storage == 0:
+        if not all_requirements.exists():
             return Response(
-                {"error": "No system requirement data available."},
+                {"error": "No system requirements found for the selected activities."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if not request.session.session_key:
-            request.session.save()
+        # Step 5: Aggregate the highest values across all requirements
+        max_cpu_score = max(req.cpu_score for req in all_requirements)
+        max_gpu_score = max(req.gpu_score for req in all_requirements)
+        max_ram = max(req.ram for req in all_requirements)
+        max_storage = max(req.storage for req in all_requirements)
 
-        RecommendationSpecification.objects.create(
-            user=request.user if request.user.is_authenticated else None,
-            session_id=(
-                request.session.session_key
-                if not request.user.is_authenticated
-                else None
-            ),
+        # Get best-matching CPU and GPU objects from benchmark
+        best_cpu = CPUBenchmark.objects.filter(score=max_cpu_score).first()
+        best_gpu = GPUBenchmark.objects.filter(score=max_gpu_score).first()
+
+        # Step 6: Save the aggregated recommendation
+        rec_spec = RecommendationSpecification.objects.create(
+            user=user if user else None,
+            session_id=str(session_id) if not user else None,
             min_cpu_score=max_cpu_score,
             min_gpu_score=max_gpu_score,
             min_ram=max_ram,
             min_storage=max_storage,
         )
 
+        # Build response
         return Response(
             {
-                "specifications": {
-                    "cpu_score_minimum": max_cpu_score,
-                    "gpu_score_minimum": max_gpu_score,
-                    "ram_minimum_gb": max_ram,
-                    "storage_minimum_gb": max_storage,
+                "recommendation_id": rec_spec.id,
+                "cpu": {
+                    "name": best_cpu.cpu if best_cpu else "Unknown",
+                    "score": max_cpu_score,
                 },
-                "budget": budget,
-            }
+                "gpu": {
+                    "name": best_gpu.cpu if best_gpu else "Unknown",
+                    "score": max_gpu_score,
+                },
+                "min_ram": max_ram,
+                "min_storage": max_storage,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
 class ProductRecommendationView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, *args, **kwargs):
+    def get_recommendation_spec(self, request):
         user = request.user if request.user.is_authenticated else None
-        session_id = request.session.session_key
+        session_id = request.query_params.get("session_id")
 
-        if not session_id and not user:
-            request.session.save()
-            session_id = request.session.session_key
-
-        try:
-            if user:
-                spec = RecommendationSpecification.objects.filter(user=user).latest(
-                    "created_at"
-                )
-            else:
-                spec = RecommendationSpecification.objects.filter(
-                    session_id=session_id
-                ).latest("created_at")
-        except RecommendationSpecification.DoesNotExist:
-            return Response(
-                {"error": "No recommendation specifications found."},
-                status=status.HTTP_404_NOT_FOUND,
+        return (
+            RecommendationSpecification.objects.filter(
+                user=user if user else None,
+                session_id=None if user else session_id,
             )
-
-        products = Product.objects.filter(
-            processor__benchmark_score__gte=spec.min_cpu_score,
-            gpu__benchmark_score__gte=spec.min_gpu_score,
-            ram__size_gb__gte=spec.min_ram,
-            storage__size_gb__gte=spec.min_storage,
+            .order_by("-created_at")
+            .first()
         )
 
-        if not products.exists():
+    def parse_storage_values(self, value):
+        try:
+            return int(value.replace("GB", "").strip())
+        except:
+            return None
+
+    def get(self, request):
+        spec = self.get_recommendation_spec(request)
+        if not spec:
             return Response(
-                {"error": "No products match the required specifications."},
-                status=status.HTTP_404_NOT_FOUND,
+                {"error": "No recommendation specification found."}, status=404
             )
 
-        return Response(ProductSerializer(products, many=True).data)
+        cpu_required = spec.min_cpu_score
+        gpu_required = spec.min_gpu_score
+        ram_required = spec.min_ram
+        storage_required = spec.min_storage
+
+        fallback = False
+        fallback_margin = 0.85  # 85% of required score
+
+        matched_products = []
+        products = Product.objects.all()
+
+        for product in products:
+            cpu = CPUBenchmark.objects.filter(
+                cpu__icontains=product.processor.data_received
+            ).first()
+            gpu = GPUBenchmark.objects.filter(
+                cpu__icontains=product.graphic.data_received
+            ).first()
+
+            if not cpu or not gpu:
+                continue
+
+            ram = self.parse_storage_values(product.memory.data_received)
+            storage = self.parse_storage_values(product.storage.data_received)
+
+            if ram is None or storage is None:
+                continue
+
+            cpu_ok = cpu.score >= cpu_required
+            gpu_ok = gpu.score >= gpu_required
+            ram_ok = ram >= ram_required
+            storage_ok = storage >= storage_required
+
+            if cpu_ok and gpu_ok and ram_ok and storage_ok:
+                product.cpu_score = cpu.score
+                product.gpu_score = gpu.score
+                product.match_strength = (
+                    "Exceeds"
+                    if cpu.score > cpu_required + 1000
+                    and gpu.score > gpu_required + 1000
+                    else "Meets"
+                )
+                matched_products.append(product)
+
+        # Fallback logic if no matching products
+        if not matched_products:
+            fallback = True
+            for product in products:
+                cpu = CPUBenchmark.objects.filter(
+                    cpu__icontains=product.processor.data_received
+                ).first()
+                gpu = GPUBenchmark.objects.filter(
+                    cpu__icontains=product.graphic.data_received
+                ).first()
+                if not cpu or not gpu:
+                    continue
+
+                ram = self.parse_storage_values(product.memory.data_received)
+                storage = self.parse_storage_values(product.storage.data_received)
+                if ram is None or storage is None:
+                    continue
+
+                cpu_ok = cpu.score >= cpu_required * fallback_margin
+                gpu_ok = gpu.score >= gpu_required * fallback_margin
+                ram_ok = ram >= ram_required
+                storage_ok = storage >= storage_required
+
+                if cpu_ok and gpu_ok and ram_ok and storage_ok:
+                    product.cpu_score = cpu.score
+                    product.gpu_score = gpu.score
+                    product.match_strength = "Fallback"
+                    matched_products.append(product)
+
+        # Optional: top CPUs/GPUs
+        top_cpus = CPUBenchmark.objects.order_by("-score")[:5]
+        top_gpus = GPUBenchmark.objects.order_by("-score")[:5]
+
+        return Response(
+            {
+                "recommendation": RecommendationSpecificationDetailedSerializer(
+                    spec
+                ).data,
+                "products": ProductSerializer(matched_products, many=True).data,
+                "top_cpus": CPUBenchmarkSerializer(top_cpus, many=True).data,
+                "top_gpus": GPUBenchmarkSerializer(top_gpus, many=True).data,
+                "is_fallback": fallback,
+                "message": (
+                    "Fallback products suggested."
+                    if fallback
+                    else "Filtered products based on main spec components."
+                ),
+            }
+        )
 
     def post(self, request, *args, **kwargs):
         spec_id = request.data.get("specification_id")
@@ -290,17 +387,75 @@ class ProductRecommendationView(APIView):
 
         spec = get_object_or_404(RecommendationSpecification, id=spec_id)
 
-        products = Product.objects.filter(
-            processor__benchmark_score__gte=spec.min_cpu_score,
-            gpu__benchmark_score__gte=spec.min_gpu_score,
-            ram__size_gb__gte=spec.min_ram,
-            storage__size_gb__gte=spec.min_storage,
+        cpu_required = spec.min_cpu_score
+        gpu_required = spec.min_gpu_score
+        ram_required = spec.min_ram
+        storage_required = spec.min_storage
+        fallback = False
+        fallback_margin = 0.85
+
+        matched_products = []
+        products = Product.objects.all()
+
+        for product in products:
+            cpu = CPUBenchmark.objects.filter(
+                cpu__icontains=product.processor.data_received
+            ).first()
+            gpu = GPUBenchmark.objects.filter(
+                cpu__icontains=product.graphic.data_received
+            ).first()
+            if not cpu or not gpu:
+                continue
+
+            ram = self.parse_storage_values(product.memory.data_received)
+            storage = self.parse_storage_values(product.storage.data_received)
+            if ram is None or storage is None:
+                continue
+
+            cpu_ok = cpu.score >= cpu_required
+            gpu_ok = gpu.score >= gpu_required
+            ram_ok = ram >= ram_required
+            storage_ok = storage >= storage_required
+
+            if cpu_ok and gpu_ok and ram_ok and storage_ok:
+                matched_products.append(product)
+
+        if not matched_products:
+            fallback = True
+            for product in products:
+                cpu = CPUBenchmark.objects.filter(
+                    cpu__icontains=product.processor.data_received
+                ).first()
+                gpu = GPUBenchmark.objects.filter(
+                    cpu__icontains=product.graphic.data_received
+                ).first()
+                if not cpu or not gpu:
+                    continue
+
+                ram = self.parse_storage_values(product.memory.data_received)
+                storage = self.parse_storage_values(product.storage.data_received)
+                if ram is None or storage is None:
+                    continue
+
+                cpu_ok = cpu.score >= cpu_required * fallback_margin
+                gpu_ok = gpu.score >= gpu_required * fallback_margin
+                ram_ok = ram >= ram_required
+                storage_ok = storage >= storage_required
+
+                if cpu_ok and gpu_ok and ram_ok and storage_ok:
+                    matched_products.append(product)
+
+        return Response(
+            {
+                "recommendation": RecommendationSpecificationDetailedSerializer(
+                    spec
+                ).data,
+                "products": ProductSerializer(matched_products, many=True).data,
+                "is_fallback": fallback,
+                "message": (
+                    "Fallback products suggested."
+                    if fallback
+                    else "Filtered products based on main spec components."
+                ),
+            }
         )
-
-        if not products.exists():
-            return Response(
-                {"error": "No products match this specification."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        return Response(ProductSerializer(products, many=True).data)
