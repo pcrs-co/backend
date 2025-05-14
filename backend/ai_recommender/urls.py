@@ -15,4 +15,3 @@ urlpatterns = [
     path("recommend/", RecommenderView.as_view(), name="recommend"),
     path("recommend_product/", ProductRecommendationView.as_view(), name="recommend"),
 ] + router.urls
-

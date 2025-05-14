@@ -25,39 +25,56 @@ class CPUBenchmarkViewSet(viewsets.ModelViewSet):
     serializer_class = CPUBenchmarkSerializer
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=['post'], url_path='upload')
+    @action(detail=False, methods=["post"], url_path="upload")
     def upload(self, request):
-        return self._handle_upload(request, item_type='cpu')
+        return self._handle_upload(request, item_type="cpu")
 
     def _handle_upload(self, request, item_type):
         file = request.FILES.get("file")
 
         if not file:
-            return Response({"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
             elif file.name.endswith((".xls", ".xlsx", ".ods")):
-                df = pd.read_excel(file, engine="odf" if file.name.endswith(".ods") else None)
+                df = pd.read_excel(
+                    file, engine="odf" if file.name.endswith(".ods") else None
+                )
             else:
-                return Response({"error": "Unsupported file type."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Unsupported file type."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             required_columns = {"name", "score"}
             if not required_columns.issubset(df.columns):
-                return Response({"error": "Missing required columns (name, score)."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Missing required columns (name, score)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             with transaction.atomic():
                 for _, row in df.iterrows():
                     name = row["name"]
                     score = int(row["score"])
 
-                    CPUBenchmark.objects.update_or_create(name=name, defaults={"benchmark_score": score})
+                    CPUBenchmark.objects.update_or_create(
+                        name=name, defaults={"benchmark_score": score}
+                    )
 
-            return Response({"message": "CPU Benchmark upload successful!"}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "CPU Benchmark upload successful!"},
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class GPUBenchmarkViewSet(viewsets.ModelViewSet):
@@ -65,39 +82,56 @@ class GPUBenchmarkViewSet(viewsets.ModelViewSet):
     serializer_class = GPUBenchmarkSerializer
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=['post'], url_path='upload')
+    @action(detail=False, methods=["post"], url_path="upload")
     def upload(self, request):
-        return self._handle_upload(request, item_type='gpu')
+        return self._handle_upload(request, item_type="gpu")
 
     def _handle_upload(self, request, item_type):
         file = request.FILES.get("file")
 
         if not file:
-            return Response({"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
             elif file.name.endswith((".xls", ".xlsx", ".ods")):
-                df = pd.read_excel(file, engine="odf" if file.name.endswith(".ods") else None)
+                df = pd.read_excel(
+                    file, engine="odf" if file.name.endswith(".ods") else None
+                )
             else:
-                return Response({"error": "Unsupported file type."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Unsupported file type."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             required_columns = {"name", "score"}
             if not required_columns.issubset(df.columns):
-                return Response({"error": "Missing required columns (name, score)."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Missing required columns (name, score)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             with transaction.atomic():
                 for _, row in df.iterrows():
                     name = row["name"]
                     score = int(row["score"])
 
-                    GPUBenchmark.objects.update_or_create(name=name, defaults={"benchmark_score": score})
+                    GPUBenchmark.objects.update_or_create(
+                        name=name, defaults={"benchmark_score": score}
+                    )
 
-            return Response({"message": "GPU Benchmark upload successful!"}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "GPU Benchmark upload successful!"},
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class ActivityViewSet(viewsets.ModelViewSet):
@@ -132,7 +166,9 @@ class UserPreferenceView(generics.CreateAPIView):
         for slug, value in answers.items():
             try:
                 question = Question.objects.get(slug=slug)
-                UserAnswer.objects.create(preference=preference, question=question, answer=value)
+                UserAnswer.objects.create(
+                    preference=preference, question=question, answer=value
+                )
             except Question.DoesNotExist:
                 continue
 
@@ -156,7 +192,10 @@ class RecommenderView(APIView):
 
         applications = Application.objects.filter(activity__name__in=activities)
         if not applications.exists():
-            return Response({"error": "No applications found for selected activities."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "No applications found for selected activities."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         max_cpu_score = max_gpu_score = max_ram = max_storage = 0
 
@@ -169,29 +208,38 @@ class RecommenderView(APIView):
                 max_storage = max(max_storage, req.storage or 0)
 
         if max_cpu_score == max_gpu_score == max_ram == max_storage == 0:
-            return Response({"error": "No system requirement data available."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "No system requirement data available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         if not request.session.session_key:
             request.session.save()
 
         RecommendationSpecification.objects.create(
             user=request.user if request.user.is_authenticated else None,
-            session_id=request.session.session_key if not request.user.is_authenticated else None,
+            session_id=(
+                request.session.session_key
+                if not request.user.is_authenticated
+                else None
+            ),
             min_cpu_score=max_cpu_score,
             min_gpu_score=max_gpu_score,
             min_ram=max_ram,
             min_storage=max_storage,
         )
 
-        return Response({
-            "specifications": {
-                "cpu_score_minimum": max_cpu_score,
-                "gpu_score_minimum": max_gpu_score,
-                "ram_minimum_gb": max_ram,
-                "storage_minimum_gb": max_storage,
-            },
-            "budget": budget,
-        })
+        return Response(
+            {
+                "specifications": {
+                    "cpu_score_minimum": max_cpu_score,
+                    "gpu_score_minimum": max_gpu_score,
+                    "ram_minimum_gb": max_ram,
+                    "storage_minimum_gb": max_storage,
+                },
+                "budget": budget,
+            }
+        )
 
 
 class ProductRecommendationView(APIView):
@@ -207,11 +255,18 @@ class ProductRecommendationView(APIView):
 
         try:
             if user:
-                spec = RecommendationSpecification.objects.filter(user=user).latest("created_at")
+                spec = RecommendationSpecification.objects.filter(user=user).latest(
+                    "created_at"
+                )
             else:
-                spec = RecommendationSpecification.objects.filter(session_id=session_id).latest("created_at")
+                spec = RecommendationSpecification.objects.filter(
+                    session_id=session_id
+                ).latest("created_at")
         except RecommendationSpecification.DoesNotExist:
-            return Response({"error": "No recommendation specifications found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "No recommendation specifications found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         products = Product.objects.filter(
             processor__benchmark_score__gte=spec.min_cpu_score,
@@ -221,7 +276,10 @@ class ProductRecommendationView(APIView):
         )
 
         if not products.exists():
-            return Response({"error": "No products match the required specifications."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "No products match the required specifications."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         return Response(ProductSerializer(products, many=True).data)
 
@@ -240,6 +298,9 @@ class ProductRecommendationView(APIView):
         )
 
         if not products.exists():
-            return Response({"error": "No products match this specification."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "No products match this specification."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         return Response(ProductSerializer(products, many=True).data)
