@@ -16,6 +16,7 @@
     "@mui/material": "^7.0.2",
     "axios": "^1.8.4",
     "bootstrap": "^5.3.5",
+    "daisyui": "^5.0.35",
     "intl-tel-input": "^25.3.1",
     "jwt-decode": "^4.0.0",
     "mdb-ui-kit": "^9.0.0",
