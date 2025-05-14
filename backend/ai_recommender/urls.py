@@ -3,12 +3,12 @@ from django.urls import path
 from .views import *
 
 router = DefaultRouter()
-router.register("questions", QuestionViewSet)
-router.register("cpu-benchmarks", CPUBenchmarkViewSet)
-router.register("gpu-benchmarks", GPUBenchmarkViewSet)
-router.register("activities", ActivityViewSet)
-router.register("applications", ApplicationViewSet)
-router.register("requirements", ApplicationSystemRequirementViewSet)
+router.register("admin/questions", QuestionViewSet)
+router.register("admin/cpu-benchmarks", CPUBenchmarkViewSet)
+router.register("admin/gpu-benchmarks", GPUBenchmarkViewSet)
+router.register("admin/activities", ActivityViewSet)
+router.register("admin/applications", ApplicationViewSet)
+router.register("admin/requirements", ApplicationSystemRequirementViewSet)
 
 urlpatterns = [
     path("user_preference/", UserPreferenceView.as_view(), name="user_preference"),
