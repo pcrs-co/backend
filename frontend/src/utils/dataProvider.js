@@ -4,7 +4,8 @@ import { ACCESS_TOKEN, REFRESH_TOKEN } from './constants';
 const RESOURCE_MAP = {
     customers: 'api/admin/customers/',
     vendors: 'api/admin/vendors/',
-    products: 'products/',
+    products: 'api/admin/products/',
+    // vendor_products: 'api/vendor/products/',
     order: 'order/',
 };
 
