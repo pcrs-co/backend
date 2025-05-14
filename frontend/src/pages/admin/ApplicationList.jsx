@@ -1,13 +1,15 @@
-import { List, Datagrid, TextField, EditButton } from 'react-admin';
+import { List, Datagrid, TextField, EditButton, ReferenceField } from 'react-admin';
 
 const ApplicationList = () => (
     <List>
-        <Datagrid>
+        <Datagrid rowClick="edit">
             <TextField source="id" />
             <TextField source="name" />
-            <TextField source="description" />
-            <TextField source="min_requirements" />
-            <TextField source="recommended_requirements" />
+            <ReferenceField source="activity" reference="activities">
+                <TextField source="name" />
+            </ReferenceField>
+            <TextField source="intensity_level" />
+            <TextField source="source" />
             <EditButton />
         </Datagrid>
     </List>

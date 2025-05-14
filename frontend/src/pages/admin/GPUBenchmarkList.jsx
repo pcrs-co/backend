@@ -2,10 +2,12 @@ import { List, Datagrid, TextField, NumberField, EditButton } from 'react-admin'
 
 const GPUBenchmarkList = () => (
     <List>
-        <Datagrid>
+        <Datagrid rowClick="edit">
             <TextField source="id" />
-            <TextField source="name" />
-            <NumberField source="benchmark_score" />
+            <TextField source="cpu" />
+            <TextField source="cpu_mark" />
+            <NumberField source="score" />
+            <NumberField source="price" />
             <EditButton />
         </Datagrid>
     </List>
