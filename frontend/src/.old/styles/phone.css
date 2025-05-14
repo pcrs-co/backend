@@ -1,0 +1,11 @@
+.iti {
+  width: 100% !important;
+}
+
+.iti--separate-dial-code .iti__selected-flag {
+  padding-left: 8px;
+}
+
+.iti__flag-container {
+  padding-right: 8px;
+}

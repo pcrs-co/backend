@@ -1,0 +1,73 @@
+.intro {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;   
+}
+
+.introHero {
+    height: 390px;
+    max-width: 50vw;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 50px;
+}
+
+.intro h1 {
+    font-size: 40px;
+    margin-bottom: 10px;
+}
+
+.intro p {
+    font-size: 15px;
+    margin-bottom: 20px;
+    color: grey;
+}
+
+.intro button {
+    margin-top: 10px;
+    padding: 10px 10px;
+    border: none;
+    background-color: rgb(0, 0, 0);
+    font-size: 15px;
+    font-weight: 600;
+    color: lightgray;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.intro button:hover {
+    background-color: rgb(69, 69, 69);
+}
+
+.gearIcon {
+    width: 15px;
+    height: 15px;
+    margin-right: 5px;
+    color: thistle;
+}
+
+.intro button:hover .gearIcon {
+    transform: rotate(180deg);
+    transition: transform 0.3s ease-in-out;
+}
+
+.approachSelectionContainer {
+    border-radius: 10px 10px 0px 0px;
+    background-color: grey;
+    color: aliceblue;
+    height: 315px;
+    width: 80vw;
+
+    /* content placement */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+}

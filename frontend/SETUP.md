@@ -1,26 +1,58 @@
-# PCRS Frontend Set-Up
+# PCRS Frontend Setup
 
-## **NOTE** - Ensure you have Node.js and npm installed on your system.
+> **Note:** Make sure Node.js and npm are installed on your system.
 
-To get started, follow the steps below:
+---
 
-### 1. **Install Project Dependencies**
+## Step 1: Install Project Dependencies
 
-Run the following command (while in project root) to install frontend dependencies:
+Navigate to the frontend folder and install all required packages:
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 2. **Start the Development Server**
+```bash
+npm install axios react-router-dom jwt-decode
+```
 
-Run the following command to start the development server:
+```bash
+npm install react-toastify
+npm install bootstrap
+npm install intl-tel-input
+npm install intl-tel-input/build/css/intlTelInput.css
+```
+
+if warning errors of old verion occur do the following:
+
+```bash
+sudo npm install -g n
+sudo n 22
+```
+
+```bash
+sudo n 22
+```
+
+```bash
+node -v
+```
+
+---
+
+## Step 2: Start the Development Server
+
+Start the development server by running:
 
 ```bash
 npm run dev
 ```
 
-Once the development server starts, you can access it at [http://localhost:5173](http://localhost:5173).
+After the server starts, the application will be available at:
 
-### Go on with [contributing](../CONTRIBUTING.md)!
+[http://localhost:5173](http://localhost:5173)
+
+---
+
+For next steps, see the [contributing guide](../CONTRIBUTING.md).
