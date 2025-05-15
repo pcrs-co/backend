@@ -78,6 +78,7 @@ class RecommendationInputSerializer(serializers.Serializer):
     technical_level = serializers.ChoiceField(choices=["technical", "non-technical"])
     budget = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
+
 class RecommendationSpecificationDetailedSerializer(serializers.ModelSerializer):
     cpu_details = serializers.SerializerMethodField()
     gpu_details = serializers.SerializerMethodField()
@@ -94,7 +95,11 @@ class RecommendationSpecificationDetailedSerializer(serializers.ModelSerializer)
         ]
 
     def get_cpu_details(self, obj):
-        cpu = CPUBenchmark.objects.filter(score__gte=obj.min_cpu_score).order_by("score").first()
+        cpu = (
+            CPUBenchmark.objects.filter(score__gte=obj.min_cpu_score)
+            .order_by("score")
+            .first()
+        )
         if cpu:
             return {
                 "name": cpu.cpu,
@@ -104,7 +109,11 @@ class RecommendationSpecificationDetailedSerializer(serializers.ModelSerializer)
         return None
 
     def get_gpu_details(self, obj):
-        gpu = GPUBenchmark.objects.filter(score__gte=obj.min_gpu_score).order_by("score").first()
+        gpu = (
+            GPUBenchmark.objects.filter(score__gte=obj.min_gpu_score)
+            .order_by("score")
+            .first()
+        )
         if gpu:
             return {
                 "name": gpu.cpu,  # It's still named 'cpu' in your GPU model
