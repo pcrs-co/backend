@@ -6,6 +6,11 @@ import {
   People as CustomerIcon,
   Inventory as ProductIcon,
   Assignment as OrderIcon,
+  Apps as ApplicationIcon,
+  HelpOutline as QuestionIcon,
+  EventNote as ActivitiesIcon,
+  Memory as CpuIcon,
+  GraphicEq as GpuIcon,
   Logout as LogoutIcon
 } from '@mui/icons-material';
 
@@ -21,6 +26,11 @@ const AdminSidebar = () => {
           <MenuItemLink to="/admin/customers" primaryText="Customers" leftIcon={<CustomerIcon />} />
           <MenuItemLink to="/admin/products" primaryText="Products" leftIcon={<ProductIcon />} />
           <MenuItemLink to="/admin/orders" primaryText="Orders" leftIcon={<OrderIcon />} />
+          <MenuItemLink to="/admin/applications" primaryText="Applications" leftIcon={<ApplicationIcon />} />
+          <MenuItemLink to="/admin/questions" primaryText="Questions" leftIcon={<QuestionIcon />} />
+          <MenuItemLink to="/admin/activities" primaryText="Activities" leftIcon={<ActivitiesIcon />} />
+          <MenuItemLink to="/admin/cpu-benchmarks" primaryText="CPU Benchmarks" leftIcon={<CpuIcon />} />
+          <MenuItemLink to="/admin/gpu-benchmarks" primaryText="GPU Benchmarks" leftIcon={<GpuIcon />} />
           <MenuItemLink to="/logout" primaryText="Logout" leftIcon={<LogoutIcon />} />
         </List>
       </Box>

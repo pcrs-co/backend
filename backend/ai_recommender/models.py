@@ -56,16 +56,17 @@ class ApplicationSystemRequirement(models.Model):
 
     def save(self, *args, **kwargs):
         if self.cpu and not self.cpu_score:
-            cpu_bench = CPUBenchmark.objects.filter(name=self.cpu).first()
+            cpu_bench = CPUBenchmark.objects.filter(cpu__icontains=self.cpu).order_by('-score').first()
             if cpu_bench:
-                self.cpu_score = cpu_bench.benchmark_score
+                self.cpu_score = cpu_bench.score
 
         if self.gpu and not self.gpu_score:
-            gpu_bench = GPUBenchmark.objects.filter(name=self.gpu).first()
+            gpu_bench = GPUBenchmark.objects.filter(cpu__icontains=self.gpu).order_by('-score').first()
             if gpu_bench:
-                self.gpu_score = gpu_bench.benchmark_score
+                self.gpu_score = gpu_bench.score
 
         super().save(*args, **kwargs)
+
 
 
 class UserPreference(models.Model):

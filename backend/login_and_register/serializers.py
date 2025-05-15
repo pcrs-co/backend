@@ -67,6 +67,12 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
+class CustomerListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = "__all__"
+
+
 class VendorSerializer(serializers.ModelSerializer):
     # User fields
     email = serializers.EmailField()
