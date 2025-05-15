@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Button from '../../features/ReusableButton';
-import { toast } from 'react-toastify';
 
 const InputBasic = () => {
   const [experienceLevel, setExperienceLevel] = useState('');
