@@ -15,7 +15,7 @@ function Home() {
             We provide device specifications, pricing, and availability to help
             you find the right device as per your needs and budget.
           </p>
-          <Button to="/get-started" variant="primary" size="lg" className="cta-button">
+          <Button to="/input-basic" variant="primary" size="lg" className="cta-button">
             Get Started
           </Button>
         </div>
