@@ -1,0 +1,12 @@
+.fade-step {
+  transition: all 0.3s ease-in-out;
+}
+.fade-step.hide {
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+}
+.fade-step.show {
+  display: block;
+  opacity: 1;
+}
