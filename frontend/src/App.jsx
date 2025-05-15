@@ -22,6 +22,7 @@ import InputBasic from './pages/public/InputBasic'
 import InputAdvanced from './pages/public/InputAdvanced'
 import Specs from './pages/public/Specs'
 import VendorProfile from './pages/public/VendorProfile'
+import UserQuestionnaire from './pages/public/UserQuestionnaire'
 
 // admin pages
 import Dashboard from './pages/admin/Dashboard';
@@ -61,6 +62,7 @@ function App() {
           <Route path="input-basic" element={<InputBasic />} />
           <Route path="input-advanced" element={<InputAdvanced />} />
           <Route path="vendor-profile" element={<VendorProfile />} />
+          <Route path="get-started" element={<UserQuestionnaire />} />
           <Route path="*" element={<NotFound />} />
         </Route>
         {/* Auth routes */}
