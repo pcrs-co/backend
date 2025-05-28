@@ -68,7 +68,6 @@ class ApplicationSystemRequirement(models.Model):
         super().save(*args, **kwargs)
 
 
-
 class UserPreference(models.Model):
     user = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, null=True, blank=True

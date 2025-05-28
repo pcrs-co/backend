@@ -32,6 +32,12 @@ class UserSerializer(serializers.ModelSerializer):
             "password",
             "password2",
         ]
+        extra_kwargs = {
+            "date_of_birth": {"required": False},
+            "region": {"required": False},
+            "district": {"required": False},
+            "avatar": {"required": False},  # Also making avatar optional if not already
+        }
 
     def validate_phone_number(self, phone):
         # Clean the phone number just like your form
@@ -54,9 +60,9 @@ class UserSerializer(serializers.ModelSerializer):
             password=validated_data["password"],
             first_name=validated_data["first_name"],
             last_name=validated_data["last_name"],
-            region=validated_data["region"],
-            district=validated_data["district"],
-            date_of_birth=validated_data["date_of_birth"],
+            region=validated_data.get("region"),
+            district=validated_data.get("district"),
+            date_of_birth=validated_data.get("date_of_birth"),
             email=validated_data["email"],
             phone_number=validated_data["phone_number"],
         )
