@@ -152,6 +152,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# OpenAI Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = "gpt-4"
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/

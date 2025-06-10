@@ -56,12 +56,20 @@ class ApplicationSystemRequirement(models.Model):
 
     def save(self, *args, **kwargs):
         if self.cpu and not self.cpu_score:
-            cpu_bench = CPUBenchmark.objects.filter(cpu__icontains=self.cpu).order_by('-score').first()
+            cpu_bench = (
+                CPUBenchmark.objects.filter(cpu__icontains=self.cpu)
+                .order_by("-score")
+                .first()
+            )
             if cpu_bench:
                 self.cpu_score = cpu_bench.score
 
         if self.gpu and not self.gpu_score:
-            gpu_bench = GPUBenchmark.objects.filter(cpu__icontains=self.gpu).order_by('-score').first()
+            gpu_bench = (
+                GPUBenchmark.objects.filter(gpu__icontains=self.gpu)
+                .order_by("-score")
+                .first()
+            )
             if gpu_bench:
                 self.gpu_score = gpu_bench.score
 
@@ -127,3 +135,84 @@ class RecommendationSpecification(models.Model):
 
     def __str__(self):
         return f"Recommendation for {self.user or self.session_id} at {self.created_at}"
+
+
+class SystemRequirementExtraction(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE)
+    source_url = models.URLField()
+    raw_text = models.TextField()  # unstructured scraped text
+    extracted_cpu = models.CharField(max_length=255, blank=True)
+    extracted_gpu = models.CharField(max_length=255, blank=True)
+    extracted_ram = models.IntegerField(null=True, blank=True)
+    extracted_storage = models.IntegerField(null=True, blank=True)
+    extraction_method = models.CharField(max_length=100, default="rule-based")
+    created_at = models.DateTimeField(auto_now_add=True)
+    modified_at = models.DateTimeField(auto_now=True)
+
+
+class RequirementMatch(models.Model):
+    extraction = models.ForeignKey(
+        SystemRequirementExtraction, on_delete=models.CASCADE
+    )
+    matched_cpu = models.ForeignKey(
+        CPUBenchmark, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    matched_gpu = models.ForeignKey(
+        GPUBenchmark, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    cpu_confidence = models.FloatField(default=0.0)
+    gpu_confidence = models.FloatField(default=0.0)
+    match_method = models.CharField(max_length=100, default="exact")
+    created_at = models.DateTimeField(auto_now_add=True)
+    modified_at = models.DateTimeField(auto_now=True)
+
+
+class AdminCorrectionLog(models.Model):
+    match = models.ForeignKey(RequirementMatch, on_delete=models.CASCADE)
+    corrected_cpu = models.ForeignKey(
+        CPUBenchmark,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="corrected_cpu",
+    )
+    corrected_gpu = models.ForeignKey(
+        GPUBenchmark,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="corrected_gpu",
+    )
+    reason = models.TextField(blank=True)
+    corrected_by = models.ForeignKey(
+        CustomUser, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    corrected_at = models.DateTimeField(auto_now_add=True)
+    modified_at = models.DateTimeField(auto_now=True)
+
+
+class RequirementExtractionLog(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE)
+    source_text = models.TextField()
+    extracted_json = models.JSONField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    method = models.CharField(max_length=50, default="regex")
+    confidence = models.FloatField(null=True)
+    reviewed = models.BooleanField(default=False)
+
+
+class ApplicationExtractionLog(models.Model):
+    activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
+    source_text = models.TextField()
+    extracted_apps = models.JSONField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    method = models.CharField(max_length=50)
+    confidence = models.FloatField()
+    reviewed = models.BooleanField(default=False)
+
+
+class ScrapingLog(models.Model):
+    activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
+    source = models.CharField(max_length=50)
+    app_count = models.PositiveIntegerField()
+    timestamp = models.DateTimeField()
