@@ -4,15 +4,20 @@ import { ACCESS_TOKEN, REFRESH_TOKEN } from './constants';
 const RESOURCE_MAP = {
     customers: 'api/admin/customers/',
     vendors: 'api/admin/vendors/',
-    products: 'products/',
-    order: 'order/',
+    products: 'api/admin/products/',
+    order: 'api/admin/order/',
+    questions: 'api/admin/questions/',
+    activities: 'api/admin/activities/',
+    applications: 'api/admin/applications/',
+    cpu_benchmarks: 'api/admin/cpu-benchmarks/',
+    gpu_benchmarks: 'api/admin/gpu-benchmarks/',
 };
 
 const getEndpoint = (resource) => RESOURCE_MAP[resource] || `${resource}/`;
 
 const saveToLocalStorage = (key, value) => localStorage.setItem(key, value);
 const getFromLocalStorage = (key) => localStorage.getItem(key);
-const removeFromLocalStorage = (keys) => keys.forEach((k) => localStorage.removeItem(k));
+const removeFromLocalStorage = (keys) => keys.forEach(k => localStorage.removeItem(k));
 
 const formatError = (error) => {
     const detail = error.response?.data?.detail || error.response?.data?.message;
@@ -23,6 +28,22 @@ const ensureArrayData = (data) => {
     if (Array.isArray(data?.results)) return data.results;
     if (Array.isArray(data)) return data;
     return data && typeof data === 'object' ? [data] : [];
+};
+
+const isFileData = (data) => {
+    return Object.values(data).some(
+        value => value instanceof File || (value && typeof value === 'object' && value.uri)
+    );
+};
+
+const convertToFormData = (data) => {
+    const formData = new FormData();
+    for (let key in data) {
+        if (data[key] !== undefined && data[key] !== null) {
+            formData.append(key, data[key]);
+        }
+    }
+    return formData;
 };
 
 const dataProvider = {
@@ -67,16 +88,16 @@ const dataProvider = {
         }
     },
 
-    getList: async (resource, { pagination, sort, filter }) => {
-        const { page, perPage } = pagination;
-        const { field, order } = sort;
+    getList: async (resource, { pagination = {}, sort = {}, filter = {} }) => {
+        const { page = 1, perPage = 10 } = pagination;
+        const { field = 'id', order = 'DESC' } = sort;
         const endpoint = getEndpoint(resource);
 
         try {
             const { data } = await api.get(endpoint, {
                 params: {
                     page,
-                    per_page: perPage,
+                    page_size: perPage,
                     ordering: order === 'ASC' ? field : `-${field}`,
                     ...filter,
                 },
@@ -101,8 +122,19 @@ const dataProvider = {
 
     create: async (resource, { data }) => {
         try {
-            const res = await api.post(getEndpoint(resource), data);
+            const payload = isFileData(data) ? convertToFormData(data) : data;
+            const headers = isFileData(data) ? { 'Content-Type': 'multipart/form-data' } : {};
+            const res = await api.post(getEndpoint(resource), payload, { headers });
             return { data: res.data };
+        } catch (error) {
+            throw formatError(error);
+        }
+    },
+
+    createMany: async (resource, { data }) => {
+        try {
+            const res = await api.post(getEndpoint(resource), data);
+            return { data: res.data.map((item, i) => ({ ...item, id: item.id || i })) };
         } catch (error) {
             throw formatError(error);
         }
@@ -110,8 +142,23 @@ const dataProvider = {
 
     update: async (resource, { id, data }) => {
         try {
-            const res = await api.patch(`${getEndpoint(resource)}${id}/`, data);
+            const payload = isFileData(data) ? convertToFormData(data) : data;
+            const headers = isFileData(data) ? { 'Content-Type': 'multipart/form-data' } : {};
+            const res = await api.patch(`${getEndpoint(resource)}${id}/`, payload, { headers });
             return { data: res.data };
+        } catch (error) {
+            throw formatError(error);
+        }
+    },
+
+    updateMany: async (resource, { ids, data }) => {
+        try {
+            const results = await Promise.all(
+                ids.map(id =>
+                    api.patch(`${getEndpoint(resource)}${id}/`, data).then(res => res.data)
+                )
+            );
+            return { data: results.map(item => item.id) };
         } catch (error) {
             throw formatError(error);
         }

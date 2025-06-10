@@ -19,7 +19,6 @@ class CustomUser(AbstractUser):
         "last_name",
         "phone_number",
         "email",
-        "region",
     ]
 
     def __str__(self):

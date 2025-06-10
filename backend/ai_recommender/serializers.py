@@ -10,6 +10,44 @@ import random
 import re
 
 
+class QuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = "__all__"
+
+
+class CPUBenchmarkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CPUBenchmark
+        fields = "__all__"
+
+
+class GPUBenchmarkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GPUBenchmark
+        fields = "__all__"
+
+
+class ActivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Activity
+        fields = "__all__"
+
+
+class ApplicationSystemRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ApplicationSystemRequirement
+        fields = "__all__"
+
+
+class ApplicationSerializer(serializers.ModelSerializer):
+    requirements = ApplicationSystemRequirementSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Application
+        fields = "__all__"
+
+
 class UserPreferenceSerializer(serializers.ModelSerializer):
     activities = serializers.ListField(child=serializers.CharField(), write_only=True)
 
@@ -39,3 +77,68 @@ class RecommendationInputSerializer(serializers.Serializer):
     primary_activities = serializers.ListField(child=serializers.CharField())
     technical_level = serializers.ChoiceField(choices=["technical", "non-technical"])
     budget = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+
+class RecommendationSpecificationDetailedSerializer(serializers.ModelSerializer):
+    cpu_details = serializers.SerializerMethodField()
+    gpu_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RecommendationSpecification
+        fields = [
+            "id",
+            "created_at",
+            "min_ram",
+            "min_storage",
+            "cpu_details",
+            "gpu_details",
+        ]
+
+    def get_cpu_details(self, obj):
+        cpu = (
+            CPUBenchmark.objects.filter(score__gte=obj.min_cpu_score)
+            .order_by("score")
+            .first()
+        )
+        if cpu:
+            return {
+                "name": cpu.cpu,
+                "score": cpu.score,
+                "price": str(cpu.price),
+            }
+        return None
+
+    def get_gpu_details(self, obj):
+        gpu = (
+            GPUBenchmark.objects.filter(score__gte=obj.min_gpu_score)
+            .order_by("score")
+            .first()
+        )
+        if gpu:
+            return {
+                "name": gpu.cpu,  # It's still named 'cpu' in your GPU model
+                "score": gpu.score,
+                "price": str(gpu.price),
+            }
+        return None
+
+
+class UsersAnswerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserAnswer
+        fields = ["question", "answer"]
+
+
+class UsersPreferenceSerializer(serializers.ModelSerializer):
+    answers = UsersAnswerSerializer(many=True)
+
+    class Meta:
+        model = UserPreference
+        fields = ["id", "answers"]
+
+    def create(self, validated_data):
+        answers_data = validated_data.pop("answers")
+        preference = UserPreference.objects.create(**validated_data)
+        for ans in answers_data:
+            UserAnswer.objects.create(preference=preference, **ans)
+        return preference

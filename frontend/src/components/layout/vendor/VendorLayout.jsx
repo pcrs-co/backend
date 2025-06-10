@@ -1,6 +1,5 @@
 import { Admin, Resource, Layout } from 'react-admin';
-import fakeDataProvider from 'ra-data-fakerest'; // or your actual data provider
-import VendorSidebar from './VendorSidebar';
+import fakeDataProvider from 'ra-data-fakerest';
 import VendorAppbar from './VendorAppbar';
 import ProductList from '../../../pages/vendor/ProductList';
 import VendorOrders from '../../../pages/vendor/VendorOrders';

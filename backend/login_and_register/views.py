@@ -3,13 +3,19 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import viewsets, permissions
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics
 from rest_framework import status
 from .serializers import *
 from .models import *
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "per_page"
+    max_page_size = 100
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -62,6 +68,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.filter(groups__name="default").order_by("created_at")
     permission_classes = [IsAuthenticated]
     serializer_class = UserSerializer
+    pagination_class = StandardResultsSetPagination
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return CustomerListSerializer  # Only lightweight fields for list view
+        return UserSerializer
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", True)
