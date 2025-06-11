@@ -95,10 +95,22 @@ class Question(models.Model):
         ("boolean", "Yes/No"),
         ("scale", "Scale (1-5)"),
     ]
+    AUDIENCE_LEVELS = [
+        ("beginner", "Beginner"),
+        ("intermediate", "Intermediate"),
+        ("expert", "Expert"),
+    ]
+
     slug = models.SlugField(unique=True)  # like "battery_life"
     question_text = models.CharField(max_length=255)
     question_type = models.CharField(max_length=10, choices=QUESTION_TYPES)
     options = models.JSONField(blank=True, null=True)
+    group = models.CharField(
+        max_length=100, blank=True, null=True
+    )  # e.g., 'profile', 'hardware'
+    audience = models.CharField(
+        max_length=15, choices=AUDIENCE_LEVELS, default="beginner"
+    )
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 

@@ -56,6 +56,7 @@ def extract_requirements_for_application(app):
             )
             llm_response = completion.choices[0].message.content
             import json
+
             parsed_llm = json.loads(llm_response)
             logger.debug(f"LLM extraction for '{app.name}': {parsed_llm}")
         except Exception as llm_err:
@@ -88,7 +89,9 @@ def extract_requirements_for_application(app):
 
         # Save structured requirements
         for req in final_data:
-            if any([req.get("cpu"), req.get("gpu"), req.get("ram"), req.get("storage")]):
+            if any(
+                [req.get("cpu"), req.get("gpu"), req.get("ram"), req.get("storage")]
+            ):
                 ApplicationSystemRequirement.objects.create(
                     application=app,
                     type=req.get("type", "minimum"),
