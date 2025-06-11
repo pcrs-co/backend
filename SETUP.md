@@ -6,10 +6,9 @@
 
 ## Step 1: Set Up a Virtual Environment
 
-In the root of the project:
+In the root of the project, run the following command:
 
 ```bash
-cd backend
 python3 -m venv venv
 ```
 
