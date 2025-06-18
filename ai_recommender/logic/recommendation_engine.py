@@ -1,49 +1,55 @@
-from ai_recommender.models import *
-from django.db.models import Q
-import uuid
+from ai_recommender.models import (
+    UserPreference,
+    Application,
+    ApplicationSystemRequirement,
+    RecommendationSpecification,
+)
+from django.db.models import Max
+from .utils import compare_requirements
 
 
-def generate_spec_range(session_or_user_id):
-    """
-    Generates a spec range (min to max) based on user's answered activities and matched applications.
-    Accepts a user ID or session ID to support both authenticated and anonymous users.
-    """
-    # Determine user preference based on session or user ID
-    preferences = UserPreference.objects.filter(
-        Q(user_id=session_or_user_id) | Q(session_id=session_or_user_id)
+def generate_recommendation(user=None, session_id=None):
+    # Get preference
+    pref = None
+    if user:
+        pref = UserPreference.objects.filter(user=user).last()
+    elif session_id:
+        pref = UserPreference.objects.filter(session_id=session_id).last()
+
+    if not pref:
+        return None  # No preferences found
+
+    # Get related applications
+    apps = []
+    if pref.applications:
+        app_names = [name.strip() for name in pref.applications.split(",")]
+        apps = Application.objects.filter(name__in=app_names)
+    if not apps:
+        return None
+
+    # Gather all requirements
+    min_requirements = ApplicationSystemRequirement.objects.filter(
+        application__in=apps, type="minimum"
     )
-    if not preferences.exists():
-        return {"error": "No user preference found for this session/user."}
-
-    preference = preferences.latest("created_at")  # In case of multiple
-    activities = preference.activities.all()
-
-    # Collect system requirements for all applications linked to those activities
-    requirements = ApplicationSystemRequirement.objects.filter(
-        application__activity__in=activities
+    rec_requirements = ApplicationSystemRequirement.objects.filter(
+        application__in=apps, type="recommended"
     )
 
-    if not requirements.exists():
-        return {"error": "No system requirements found for the selected activities."}
+    min_specs = compare_requirements(min_requirements)
+    rec_specs = compare_requirements(rec_requirements)
 
-    # Get numeric ranges for ram and storage
-    ram_values = [r.ram for r in requirements]
-    storage_values = [r.storage for r in requirements]
+    # Save to DB
+    rec = RecommendationSpecification.objects.create(
+        user=user,
+        session_id=str(session_id) if not user else None,
+        min_cpu_score=min_specs["cpu_score"],
+        min_gpu_score=min_specs["gpu_score"],
+        min_ram=min_specs["ram"],
+        min_storage=min_specs["storage"],
+        recommended_cpu_score=rec_specs["cpu_score"],
+        recommended_gpu_score=rec_specs["gpu_score"],
+        recommended_ram=rec_specs["ram"],
+        recommended_storage=rec_specs["storage"],
+    )
 
-    # Extract CPUs and GPUs for benchmarking purposes
-    cpu_values = list(set([r.cpu for r in requirements]))
-    gpu_values = list(set([r.gpu for r in requirements]))
-
-    return {
-        "cpu_range": cpu_values,  # Later matched to CPU benchmark scores
-        "gpu_range": gpu_values,  # Later matched to GPU benchmark scores
-        "ram_range": {
-            "min": min(ram_values),
-            "max": max(ram_values),
-        },
-        "storage_range": {
-            "min": min(storage_values),
-            "max": max(storage_values),
-        },
-        "activities": [a.name for a in activities],
-    }
+    return rec

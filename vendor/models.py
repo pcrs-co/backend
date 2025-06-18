@@ -1,5 +1,6 @@
-from django.db import models
+from ai_recommender.models import CPUBenchmark, GPUBenchmark
 from login_and_register.models import *
+from django.db import models
 
 
 class Product(models.Model):
@@ -94,8 +95,32 @@ class Product(models.Model):
         null=True,
         blank=True,
     )
+    # Example addition to Processor and Graphic
+    cpu_score = models.IntegerField(blank=True, null=True)
+    gpu_score = models.IntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # CPU Score lookup
+        if self.processor and self.processor.model:
+            try:
+                self.cpu_score = CPUBenchmark.objects.get(
+                    name__icontains=self.processor.model
+                ).score
+            except CPUBenchmark.DoesNotExist:
+                self.cpu_score = None  # or log fallback
+
+        # GPU Score lookup
+        if self.graphic and self.graphic.model:
+            try:
+                self.gpu_score = GPUBenchmark.objects.get(
+                    name__icontains=self.graphic.model
+                ).score
+            except GPUBenchmark.DoesNotExist:
+                self.gpu_score = None  # or log fallback
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

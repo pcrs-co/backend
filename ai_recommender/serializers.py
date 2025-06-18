@@ -10,12 +10,6 @@ import random
 import re
 
 
-class QuestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Question
-        fields = "__all__"
-
-
 class CPUBenchmarkSerializer(serializers.ModelSerializer):
     class Meta:
         model = CPUBenchmark
@@ -50,95 +44,31 @@ class ApplicationSerializer(serializers.ModelSerializer):
 
 class UserPreferenceSerializer(serializers.ModelSerializer):
     activities = serializers.ListField(child=serializers.CharField(), write_only=True)
+    applications = serializers.ListField(child=serializers.CharField(), write_only=True)
 
     class Meta:
         model = UserPreference
-        fields = ["activities", "custom_applications", "profession", "session_id"]
+        fields = ["activities", "applications", "session_id", "budget"]
 
     def create(self, validated_data):
         activity_names = validated_data.pop("activities")
+        app_names = validated_data.pop("applications")
         preference = UserPreference.objects.create(**validated_data)
+
         for name in activity_names:
             activity, _ = Activity.objects.get_or_create(
                 name__iexact=name.strip(), defaults={"name": name.strip()}
             )
             preference.activities.add(activity)
-        return preference
 
+        for app_name in app_names:
+            app = Application.objects.filter(name__iexact=app_name.strip()).first()
+            if not app:
+                # Fallback: attach to first activity or a dummy
+                activity = preference.activities.first() or Activity.objects.first()
+                app = Application.objects.create(
+                    name=app_name.strip(), activity=activity, intensity_level="medium"
+                )
+            preference.applications.add(app)
 
-class UserAnswerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserAnswer
-        fields = "__all__"
-
-
-class RecommendationInputSerializer(serializers.Serializer):
-    profession = serializers.CharField()
-    primary_activities = serializers.ListField(child=serializers.CharField())
-    technical_level = serializers.ChoiceField(choices=["technical", "non-technical"])
-    budget = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-
-
-class RecommendationSpecificationDetailedSerializer(serializers.ModelSerializer):
-    cpu_details = serializers.SerializerMethodField()
-    gpu_details = serializers.SerializerMethodField()
-
-    class Meta:
-        model = RecommendationSpecification
-        fields = [
-            "id",
-            "created_at",
-            "min_ram",
-            "min_storage",
-            "cpu_details",
-            "gpu_details",
-        ]
-
-    def get_cpu_details(self, obj):
-        cpu = (
-            CPUBenchmark.objects.filter(score__gte=obj.min_cpu_score)
-            .order_by("score")
-            .first()
-        )
-        if cpu:
-            return {
-                "name": cpu.cpu,
-                "score": cpu.score,
-                "price": str(cpu.price),
-            }
-        return None
-
-    def get_gpu_details(self, obj):
-        gpu = (
-            GPUBenchmark.objects.filter(score__gte=obj.min_gpu_score)
-            .order_by("score")
-            .first()
-        )
-        if gpu:
-            return {
-                "name": gpu.cpu,  # It's still named 'cpu' in your GPU model
-                "score": gpu.score,
-                "price": str(gpu.price),
-            }
-        return None
-
-
-class UsersAnswerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserAnswer
-        fields = ["question", "answer"]
-
-
-class UsersPreferenceSerializer(serializers.ModelSerializer):
-    answers = UsersAnswerSerializer(many=True)
-
-    class Meta:
-        model = UserPreference
-        fields = ["id", "answers"]
-
-    def create(self, validated_data):
-        answers_data = validated_data.pop("answers")
-        preference = UserPreference.objects.create(**validated_data)
-        for ans in answers_data:
-            UserAnswer.objects.create(preference=preference, **ans)
         return preference

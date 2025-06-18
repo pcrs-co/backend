@@ -11,6 +11,19 @@ import random
 import re
 
 
+class VendorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        fields = [
+            "id",
+            "company_name",
+            "location",
+            "email",
+            "phone_number",
+            "avatar",  # Optional: if using logo/image
+        ]
+
+
 class ProcessorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Processor
@@ -338,3 +351,28 @@ class ProductUploadSerializer(serializers.Serializer):
                 # Log the error
                 print(f"Failed to process row {index}: {e}")
                 continue
+
+
+class ProductRecommendationSerializer(serializers.ModelSerializer):
+    vendor = VendorSerializer()
+    processor = ProcessorSerializer()
+    memory = MemorySerializer()
+    storage = StorageSerializer()
+    graphic = GraphicSerializer()
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "name",
+            "brand",
+            "product_type",
+            "price",
+            "cpu_score",
+            "gpu_score",
+            "vendor",
+            "processor",
+            "memory",
+            "storage",
+            "graphic",
+        ]

@@ -1,4 +1,5 @@
 from login_and_register.models import *
+from django.db.models import Q
 from django.db import models
 import uuid
 
@@ -21,6 +22,9 @@ class Application(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.name
+
 
 class CPUBenchmark(models.Model):
     cpu = models.CharField(max_length=255)  # "Intel Core i7-9700K"
@@ -28,12 +32,18 @@ class CPUBenchmark(models.Model):
     score = models.IntegerField()
     price = models.DecimalField(decimal_places=2, max_digits=65)
 
+    def __str__(self):
+        return self.cpu
+
 
 class GPUBenchmark(models.Model):
-    cpu = models.CharField(max_length=255)  # "NVIDIA RTX 3070"
-    cpu_mark = models.CharField(max_length=255)
+    gpu = models.CharField(max_length=255)  # "NVIDIA RTX 3070"
+    gpu_mark = models.CharField(max_length=255)
     score = models.IntegerField()
     price = models.DecimalField(decimal_places=2, max_digits=65)
+
+    def __str__(self):
+        return self.gpu
 
 
 class ApplicationSystemRequirement(models.Model):
@@ -57,7 +67,9 @@ class ApplicationSystemRequirement(models.Model):
     def save(self, *args, **kwargs):
         if self.cpu and not self.cpu_score:
             cpu_bench = (
-                CPUBenchmark.objects.filter(cpu__icontains=self.cpu)
+                CPUBenchmark.objects.filter(
+                    Q(cpu__icontains=self.cpu) | Q(cpu_mark__icontains=self.cpu)
+                )
                 .order_by("-score")
                 .first()
             )
@@ -66,7 +78,9 @@ class ApplicationSystemRequirement(models.Model):
 
         if self.gpu and not self.gpu_score:
             gpu_bench = (
-                GPUBenchmark.objects.filter(gpu__icontains=self.gpu)
+                GPUBenchmark.objects.filter(
+                    Q(gpu__icontains=self.gpu) | Q(gpu_mark__icontains=self.gpu)
+                )
                 .order_by("-score")
                 .first()
             )
@@ -82,53 +96,10 @@ class UserPreference(models.Model):
     )
     session_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     activities = models.ManyToManyField(Activity)
-    custom_applications = models.TextField(blank=True, null=True)
-    profession = models.CharField(max_length=255, blank=True, null=True)
+    applications = models.ManyToManyField(Application, blank=True)
+    budget = models.DecimalField(max_digits=65, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
-
-
-class Question(models.Model):
-    QUESTION_TYPES = [
-        ("choice", "Multiple Choice"),
-        ("text", "Text Input"),
-        ("boolean", "Yes/No"),
-        ("scale", "Scale (1-5)"),
-    ]
-    AUDIENCE_LEVELS = [
-        ("beginner", "Beginner"),
-        ("intermediate", "Intermediate"),
-        ("expert", "Expert"),
-    ]
-
-    slug = models.SlugField(unique=True)  # like "battery_life"
-    question_text = models.CharField(max_length=255)
-    question_type = models.CharField(max_length=10, choices=QUESTION_TYPES)
-    options = models.JSONField(blank=True, null=True)
-    group = models.CharField(
-        max_length=100, blank=True, null=True
-    )  # e.g., 'profile', 'hardware'
-    audience = models.CharField(
-        max_length=15, choices=AUDIENCE_LEVELS, default="beginner"
-    )
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    modified_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.question_text
-
-
-class UserAnswer(models.Model):
-    preference = models.ForeignKey(
-        "UserPreference", on_delete=models.CASCADE, related_name="answers"
-    )
-    question = models.ForeignKey(Question, on_delete=models.CASCADE)
-    answer = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    modified_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.question.slug}: {self.answer}"
 
 
 class RecommendationSpecification(models.Model):
@@ -138,8 +109,20 @@ class RecommendationSpecification(models.Model):
     session_id = models.CharField(
         max_length=255, null=True, blank=True
     )  # if not logged in
+    type = models.CharField(
+        max_length=20,
+        choices=[("recommended", "Recommended"), ("minimum", "Minimum")],
+        default="recommended",
+    )
+    source_preference = models.ForeignKey(
+        UserPreference, on_delete=models.SET_NULL, null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    recommended_cpu_score = models.FloatField(null=True, blank=True)
+    recommended_gpu_score = models.FloatField(null=True, blank=True)
+    recommended_ram = models.IntegerField(null=True, blank=True)
+    recommended_storage = models.IntegerField(null=True, blank=True)
     min_cpu_score = models.FloatField()
     min_gpu_score = models.FloatField()
     min_ram = models.IntegerField()
