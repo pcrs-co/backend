@@ -1,4 +1,4 @@
-from ai_recommender.models import (
+from ..models import (
     UserPreference,
     Application,
     ApplicationSystemRequirement,

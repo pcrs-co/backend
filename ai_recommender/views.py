@@ -1,10 +1,10 @@
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from ai_recommender.logic.recommendation_engine import generate_recommendation
+from .logic.recommendation_engine import generate_recommendation
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import ValidationError
 from rest_framework import status, viewsets, generics
-from ai_recommender.logic.enrich_app_data import enrich_application
+from .logic.enrich_app_data import enrich_application
 from vendor.serializers import ProductSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response

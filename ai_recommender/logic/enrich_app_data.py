@@ -1,4 +1,4 @@
-from models import Application, ApplicationSystemRequirement, Activity
+from ..models import Application, ApplicationSystemRequirement, Activity
 from .ai_scraper import ask_openai
 from .ai_extractor import extract_requirements_from_response
 from .utils import get_cpu_score, get_gpu_score

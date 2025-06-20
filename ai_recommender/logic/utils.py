@@ -1,4 +1,4 @@
-from models import CPUBenchmark, GPUBenchmark
+from ..models import CPUBenchmark, GPUBenchmark
 
 
 def get_cpu_score(cpu_name):
