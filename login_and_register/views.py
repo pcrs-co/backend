@@ -37,12 +37,12 @@ class VendorViewSet(viewsets.ModelViewSet):
         user_data = UserSerializer(vendor.user).data
         combined_data = {"vendor": vendor_data, "user": user_data}
         return Response(combined_data)
-    
+
     # --- ADD THIS METHOD ---
     def create(self, request, *args, **kwargs):
         # Use the correct serializer for creation
         serializer = self.get_serializer(data=request.data)
-        
+
         # This is the most important part.
         # If validation fails, it stops here and returns a 400 response.
         try:
@@ -62,14 +62,16 @@ class VendorViewSet(viewsets.ModelViewSet):
             # print(f"Unexpected Error during vendor creation: {e}")
             return Response(
                 {"detail": "An internal error occurred during vendor creation."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
         # If everything succeeds, return the 201 Created response.
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-    # --- END OF ADDED METHOD ---
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
+    # --- END OF ADDED METHOD ---
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", True)
