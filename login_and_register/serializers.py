@@ -3,6 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group
 from django.core.mail import send_mail
 from rest_framework import serializers
+from django.db import transaction
 from io import BytesIO
 from .models import *
 import pandas as pd
@@ -122,43 +123,50 @@ class VendorSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        # Extract user data
+        # Use .pop() safely. This is much cleaner.
         user_data = {
             "email": validated_data.pop("email"),
             "username": validated_data.pop("username"),
-            "first_name": validated_data.pop("first_name"),
-            "last_name": validated_data.pop("last_name"),
             "phone_number": validated_data.pop("phone_number"),
-            "region": validated_data.pop("region"),
-            "district": validated_data.pop("district"),
-            "password": validated_data.pop("password", self.generate_temp_password()),
+            "password": validated_data.pop("password"),
+            "first_name": validated_data.pop(
+                "first_name", ""
+            ),  # Use default empty string
+            "last_name": validated_data.pop(
+                "last_name", ""
+            ),  # Use default empty string
+            "region": validated_data.pop("region", ""),  # Use default empty string
+            "district": validated_data.pop("district", ""),  # Use default empty string
         }
 
-        # Create user (password will be hashed automatically)
-        user = CustomUser.objects.create_user(
-            username=user_data["username"],
-            email=user_data["email"],
-            password=user_data["password"],  # This gets hashed
-            first_name=user_data["first_name"],
-            last_name=user_data["last_name"],
-            phone_number=user_data["phone_number"],
-            region=user_data["region"],
-            district=user_data["district"],
-        )
+        # The remaining keys in validated_data are for the Vendor model:
+        # { 'company_name': '...', 'location': '...', 'logo': ... }
 
-        # Add to vendor group
-        vendor_group, _ = Group.objects.get_or_create(name="vendor")
-        user.groups.add(vendor_group)
-
-        # Create vendor profile
+        # --- TRANSACTION ---
+        # It's best practice to wrap creations in a transaction.
+        # If the vendor creation fails, the user creation will be rolled back.
         try:
-            vendor = Vendor.objects.create(user=user, **validated_data)
+            with transaction.atomic():
+                # Create user
+                user = CustomUser.objects.create_user(**user_data)
+
+                # Add to vendor group
+                vendor_group, _ = Group.objects.get_or_create(name="vendor")
+                user.groups.add(vendor_group)
+
+                # Create vendor profile with the remaining data
+                vendor = Vendor.objects.create(user=user, **validated_data)
+
         except Exception as e:
+            # If anything goes wrong, raise a generic error that the view will catch
+            # The original validation error (e.g., "username already exists") would have
+            # been caught by serializer.is_valid() in the view.
             raise serializers.ValidationError(
-                {"non_field_errors": ["Failed to create vendor profile."]}
+                f"Failed to create user and vendor profile. Error: {str(e)}"
             )
 
-        # Send credentials (password is the plaintext temporary one)
+        # Send credentials AFTER the transaction is successful
+        # We pass the original, un-hashed password for the email
         self._send_welcome_email(user.email, user_data["password"])
 
         return vendor
