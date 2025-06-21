@@ -81,18 +81,15 @@ class CustomerListSerializer(serializers.ModelSerializer):
 
 class VendorSerializer(serializers.ModelSerializer):
     # User fields
-    email = serializers.EmailField(required=True)
-    first_name = serializers.CharField(required=True)
-    last_name = serializers.CharField(required=True)
-    username = serializers.CharField(required=True)
-    region = serializers.CharField(required=False, allow_blank=True)
-    district = serializers.CharField(required=False, allow_blank=True)
-    phone_number = serializers.CharField(required=True)
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    username = serializers.CharField()
+    region = serializers.CharField()
+    district = serializers.CharField()
+    phone_number = serializers.CharField()
     password = serializers.CharField(
-        write_only=True,
-        required=False,
-        style={"input_type": "password"},
-        validators=[validate_password],
+        write_only=True, required=False, style={"input_type": "password"}
     )
 
     # Vendor fields
@@ -112,65 +109,59 @@ class VendorSerializer(serializers.ModelSerializer):
             "phone_number",
             "region",
             "district",
-            "password",
+            "password",  # Now properly named
         ]
-
-    def validate_phone_number(self, phone):
-        phone = re.sub(r"[^\d+]", "", phone)
-        if not phone.startswith("+"):
-            phone = "+255" + phone
-        if not re.match(r"^\+\d{1,4}\d{7,15}$", phone):
-            raise serializers.ValidationError("Please enter a valid phone number.")
-        return phone
-
-    def validate_email(self, value):
-        if CustomUser.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return value
-
-    def validate_username(self, value):
-        if CustomUser.objects.filter(username=value).exists():
-            raise serializers.ValidationError(
-                "A user with this username already exists."
-            )
-        return value
+        extra_kwargs = {
+            "first_name": {"required": False, "allow_null": True},
+            "last_name": {"required": False, "allow_null": True},
+            "logo": {"required": False, "allow_null": True},
+            "date_of_birth": {"required": False},
+            "region": {"required": False},
+            "district": {"required": False},
+            "avatar": {"required": False},  # Also making avatar optional if not already
+        }
 
     def create(self, validated_data):
+        # Extract user data
+        user_data = {
+            "email": validated_data.pop("email"),
+            "username": validated_data.pop("username"),
+            "first_name": validated_data.pop("first_name"),
+            "last_name": validated_data.pop("last_name"),
+            "phone_number": validated_data.pop("phone_number"),
+            "region": validated_data.pop("region"),
+            "district": validated_data.pop("district"),
+            "password": validated_data.pop("password", self.generate_temp_password()),
+        }
+
+        # Create user (password will be hashed automatically)
+        user = CustomUser.objects.create_user(
+            username=user_data["username"],
+            email=user_data["email"],
+            password=user_data["password"],  # This gets hashed
+            first_name=user_data["first_name"],
+            last_name=user_data["last_name"],
+            phone_number=user_data["phone_number"],
+            region=user_data["region"],
+            district=user_data["district"],
+        )
+
+        # Add to vendor group
+        vendor_group, _ = Group.objects.get_or_create(name="vendor")
+        user.groups.add(vendor_group)
+
+        # Create vendor profile
         try:
-            # Extract user data
-            user_data = {
-                "email": validated_data.pop("email"),
-                "username": validated_data.pop("username"),
-                "first_name": validated_data.pop("first_name"),
-                "last_name": validated_data.pop("last_name"),
-                "phone_number": validated_data.pop("phone_number"),
-                "region": validated_data.get("region", ""),
-                "district": validated_data.get("district", ""),
-                "password": validated_data.pop(
-                    "password", self.generate_temp_password()
-                ),
-            }
-
-            # Create user
-            user = CustomUser.objects.create_user(**user_data)
-
-            # Add to vendor group
-            vendor_group, _ = Group.objects.get_or_create(name="vendor")
-            user.groups.add(vendor_group)
-
-            # Create vendor profile
             vendor = Vendor.objects.create(user=user, **validated_data)
-
-            # Send credentials
-            self._send_welcome_email(user.email, user_data["password"])
-
-            return vendor
         except Exception as e:
-            # Log the error for debugging
-            print(f"Error creating vendor: {str(e)}")
             raise serializers.ValidationError(
-                {"non_field_errors": ["Failed to create vendor. Please try again."]}
+                {"non_field_errors": ["Failed to create vendor profile."]}
             )
+
+        # Send credentials (password is the plaintext temporary one)
+        self._send_welcome_email(user.email, user_data["password"])
+
+        return vendor
 
     @staticmethod
     def generate_temp_password(length=12):
@@ -188,11 +179,12 @@ class VendorSerializer(serializers.ModelSerializer):
                 message,
                 from_email,
                 [email],
-                fail_silently=False,
+                fail_silently=False,  # Set to True in production if you want to ignore errors
             )
         except Exception as e:
             print(f"Failed to send email: {e}")
-            # Consider logging this error properly
+            # You can log this error to your error tracking system
+            # or queue it for retry later
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
