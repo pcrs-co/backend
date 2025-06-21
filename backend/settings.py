@@ -113,6 +113,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "contacts.pcrs@gmail.com"
 EMAIL_HOST_PASSWORD = "PCRS@student123"
+DEFAULT_FROM_EMAIL = "contacts.pcrs@gmail.com"
 
 # Media configuration
 MEDIA_URL = "/media/"
