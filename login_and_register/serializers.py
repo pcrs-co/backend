@@ -12,32 +12,46 @@ import random
 import re
 
 
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    """
+    Handles the fields specific to the Customer profile.
+    """
+
+    class Meta:
+        model = Customer
+        fields = ["middle_name", "date_of_birth", "avatar", "district", "region"]
+
+
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password]
-    )
+    """
+    Handles the creation and updating of a CustomUser and their linked Customer profile.
+    This is for standard user/customer registration.
+    """
+
+    # From Customer profile model, but handled here for convenience
+    customer_profile = CustomerProfileSerializer(required=False)
+
     password2 = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = CustomUser
         fields = [
+            "id",
+            "username",
+            "email",
             "first_name",
             "last_name",
-            "date_of_birth",
             "phone_number",
             "region",
             "district",
-            "email",
-            "username",
-            "avatar",
+            "customer_profile",
             "password",
             "password2",
         ]
         extra_kwargs = {
-            "date_of_birth": {"required": False},
-            "region": {"required": False},
-            "district": {"required": False},
-            "avatar": {"required": False},  # Also making avatar optional if not already
+            "password": {"write_only": True, "validators": [validate_password]},
+            "first_name": {"required": True},
+            "last_name": {"required": True},
         }
 
     def validate_phone_number(self, phone):
@@ -49,29 +63,52 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Please enter a valid phone number.")
         return phone
 
-    def validate(self, data):
-        if data["password"] != data["password2"]:
+    def validate(self, attrs):
+        if attrs["password"] != attrs.pop(
+            "password2"
+        ):  # pop password2 after comparison
             raise serializers.ValidationError({"password": "Passwords do not match."})
-        return data
+        return attrs
 
     def create(self, validated_data):
-        validated_data.pop("password2")
-        user = CustomUser.objects.create_user(
-            username=validated_data["username"],
-            password=validated_data["password"],
-            first_name=validated_data["first_name"],
-            last_name=validated_data["last_name"],
-            region=validated_data.get("region"),
-            district=validated_data.get("district"),
-            date_of_birth=validated_data.get("date_of_birth"),
-            email=validated_data["email"],
-            phone_number=validated_data["phone_number"],
-        )
+        customer_data = validated_data.pop("customer_profile", {})
 
-        default_group, created = Group.objects.get_or_create(name="default")
-        user.groups.add(default_group)
+        with transaction.atomic():
+            user = CustomUser.objects.create_user(**validated_data)
+
+            # Create the customer profile linked to the new user
+            Customer.objects.create(user=user, **customer_data)
+
+            # Add user to the 'customer' group (or 'default')
+            customer_group, _ = Group.objects.get_or_create(name="customer")
+            user.groups.add(customer_group)
 
         return user
+
+    def update(self, instance, validated_data):
+        customer_data = validated_data.pop("customer_profile", {})
+        customer_profile = instance.customer_profile
+
+        # Update the CustomUser instance
+        instance = super().update(instance, validated_data)
+
+        # Update the nested CustomerProfile instance
+        if customer_data:
+            for attr, value in customer_data.items():
+                setattr(customer_profile, attr, value)
+            customer_profile.save()
+
+        return instance
+
+
+class CustomerListSerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer for listing customers in the admin panel.
+    """
+
+    class Meta:
+        model = CustomUser
+        fields = ["id", "username", "first_name", "last_name", "email", "phone_number"]
 
 
 class CustomerListSerializer(serializers.ModelSerializer):
@@ -80,21 +117,15 @@ class CustomerListSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class VendorSerializer(serializers.ModelSerializer):
-    # User fields
-    email = serializers.EmailField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    username = serializers.CharField()
-    region = serializers.CharField()
-    district = serializers.CharField()
-    phone_number = serializers.CharField()
-    password = serializers.CharField(
-        write_only=True, required=False, style={"input_type": "password"}
-    )
+class VendorListSerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer for listing vendors in the admin panel.
+    Uses 'source' to pull data from the related user model.
+    """
 
-    # Vendor fields
-    logo = serializers.ImageField(required=False, allow_null=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+    phone_number = serializers.CharField(source="user.phone_number", read_only=True)
 
     class Meta:
         model = Vendor
@@ -102,79 +133,101 @@ class VendorSerializer(serializers.ModelSerializer):
             "id",
             "company_name",
             "location",
-            "email",
             "logo",
-            "first_name",
-            "last_name",
+            "verified",
+            "username",
+            "email",
+            "phone_number",
+        ]
+
+
+class VendorSerializer(serializers.ModelSerializer):
+    """
+    The main serializer for CREATING and RETRIEVING a single Vendor.
+    It accepts user data for creation but doesn't map it directly to the Vendor model.
+    """
+
+    # User fields for write operations (creating a new vendor)
+    email = serializers.EmailField(write_only=True, required=True)
+    username = serializers.CharField(write_only=True, required=True)
+    phone_number = serializers.CharField(write_only=True, required=True)
+    region = serializers.CharField(write_only=True, required=False)
+    district = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = Vendor
+        fields = [
+            "id",
+            "company_name",
+            "location",
+            "logo",
+            "verified",
+            # Write-only fields for user creation:
+            "email",
             "username",
             "phone_number",
             "region",
             "district",
-            "password",  # Now properly named
         ]
-        extra_kwargs = {
-            "first_name": {"required": False, "allow_null": True},
-            "last_name": {"required": False, "allow_null": True},
-            "logo": {"required": False, "allow_null": True},
-            "date_of_birth": {"required": False},
-            "region": {"required": False},
-            "district": {"required": False},
-            "avatar": {"required": False},  # Also making avatar optional if not already
+        read_only_fields = ["id", "verified"]  # These fields are not set on create
+
+    def to_representation(self, instance):
+        """
+        Controls the output (read) representation.
+        We start with the Vendor fields and add the related User fields.
+        """
+        representation = super().to_representation(instance)
+        user_info = UserSerializer(instance.user).data
+        # Merge user info into the main representation for easy frontend access
+        representation["user"] = {
+            "id": user_info.get("id"),
+            "username": user_info.get("username"),
+            "email": user_info.get("email"),
+            "phone_number": user_info.get("phone_number"),
+            "region": user_info.get("region"),
+            "district": user_info.get("district"),
         }
+        return representation
 
-    def create(self, validated_data):
-        # Use .pop() safely. This is much cleaner.
-        user_data = {
-            "email": validated_data.pop("email"),
-            "username": validated_data.pop("username"),
-            "phone_number": validated_data.pop("phone_number"),
-            "password": validated_data.pop("password"),
-            "first_name": validated_data.pop(
-                "first_name", ""
-            ),  # Use default empty string
-            "last_name": validated_data.pop(
-                "last_name", ""
-            ),  # Use default empty string
-            "region": validated_data.pop("region", ""),  # Use default empty string
-            "district": validated_data.pop("district", ""),  # Use default empty string
-        }
-
-        # The remaining keys in validated_data are for the Vendor model:
-        # { 'company_name': '...', 'location': '...', 'logo': ... }
-
-        # --- TRANSACTION ---
-        # It's best practice to wrap creations in a transaction.
-        # If the vendor creation fails, the user creation will be rolled back.
-        try:
-            with transaction.atomic():
-                # Create user
-                user = CustomUser.objects.create_user(**user_data)
-
-                # Add to vendor group
-                vendor_group, _ = Group.objects.get_or_create(name="vendor")
-                user.groups.add(vendor_group)
-
-                # Create vendor profile with the remaining data
-                vendor = Vendor.objects.create(user=user, **validated_data)
-
-        except Exception as e:
-            # If anything goes wrong, raise a generic error that the view will catch
-            # The original validation error (e.g., "username already exists") would have
-            # been caught by serializer.is_valid() in the view.
-            raise serializers.ValidationError(
-                f"Failed to create user and vendor profile. Error: {str(e)}"
-            )
-
-        # Send credentials AFTER the transaction is successful
-        # We pass the original, un-hashed password for the email
-        self._send_welcome_email(user.email, user_data["password"])
-
-        return vendor
+        # Your email sending logic can remain here if needed.
 
     @staticmethod
     def generate_temp_password(length=12):
         characters = string.ascii_letters + string.digits + "@#$!%^&*"
         return "".join(random.choices(characters, k=length))
+
+    def create(self, validated_data):
+        # --- KEY CHANGE: GENERATE PASSWORD HERE ---
+        temp_password = self.generate_temp_password()
+
+        user_data = {
+            "email": validated_data.pop("email"),
+            "username": validated_data.pop("username"),
+            "phone_number": validated_data.pop("phone_number"),
+            "region": validated_data.pop("region", ""),
+            "district": validated_data.pop("district", ""),
+            # Add the generated password to the user data
+            "password": temp_password,
+        }
+
+        # What's left in validated_data are the Vendor fields:
+        # company_name, location, logo
+
+        try:
+            with transaction.atomic():
+                user = CustomUser.objects.create_user(**user_data)
+
+                vendor_group, _ = Group.objects.get_or_create(name="vendor")
+                user.groups.add(vendor_group)
+
+                vendor = Vendor.objects.create(user=user, **validated_data)
+        except Exception as e:
+            raise serializers.ValidationError(
+                {"detail": f"Failed during account creation: {e}"}
+            )
+
+        self._send_welcome_email(user.email, user_data["password"])
+        return vendor
 
     def _send_welcome_email(self, email, password):
         try:
@@ -191,8 +244,6 @@ class VendorSerializer(serializers.ModelSerializer):
             )
         except Exception as e:
             print(f"Failed to send email: {e}")
-            # You can log this error to your error tracking system
-            # or queue it for retry later
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -210,29 +261,3 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         data["username"] = user.username
         return data
-
-
-class VendorListSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source="user.email")
-    first_name = serializers.CharField(source="user.first_name")
-    last_name = serializers.CharField(source="user.last_name")
-    username = serializers.CharField(source="user.username")
-    region = serializers.CharField(source="user.region")
-    district = serializers.CharField(source="user.district")
-    phone_number = serializers.CharField(source="user.phone_number")
-
-    class Meta:
-        model = Vendor
-        fields = [
-            "id",
-            "company_name",
-            "location",
-            "email",
-            "logo",
-            "first_name",
-            "last_name",
-            "username",
-            "phone_number",
-            "region",
-            "district",
-        ]
