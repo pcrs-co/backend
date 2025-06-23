@@ -48,6 +48,8 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    # This sets the default pagination class for all views
+    # 'DEFAULT_PAGINATION_CLASS': 'backend.pagination.StandardResultsSetPagination',
     "PAGE_SIZE": 10,
 }
 
@@ -193,3 +195,22 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
+
+# ==============================================================================
+# CELERY SETTINGS
+# ==============================================================================
+
+# This is the URL of your Redis server.
+# If Redis is running on the same machine on its default port, this is correct.
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+
+# This tells Celery to store task results in Redis as well.
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+
+# This tells Celery to accept content in 'application/json' format.
+CELERY_ACCEPT_CONTENT = ["application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+
+# This sets the timezone for Celery to match your Django project's timezone.
+CELERY_TIMEZONE = TIME_ZONE  # TIME_ZONE should already be defined in your settings

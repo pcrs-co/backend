@@ -3,8 +3,9 @@ from .logic.recommendation_engine import generate_recommendation
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import ValidationError
-from rest_framework import status, viewsets, generics
 from .logic.enrich_app_data import enrich_application
+from rest_framework import status, viewsets, generics
+from .mixins import AsynchronousBenchmarkUploadMixin
 from vendor.serializers import ProductSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -19,8 +20,8 @@ import pandas as pd
 import uuid
 
 
-class CPUBenchmarkViewSet(viewsets.ModelViewSet):
-    queryset = CPUBenchmark.objects.all()
+class CPUBenchmarkViewSet(AsynchronousBenchmarkUploadMixin, viewsets.ModelViewSet):
+    queryset = CPUBenchmark.objects.all().order_by("score")
     serializer_class = CPUBenchmarkSerializer
     permission_classes = [IsAuthenticated]
 
@@ -28,109 +29,15 @@ class CPUBenchmarkViewSet(viewsets.ModelViewSet):
     def upload(self, request):
         return self._handle_upload(request, item_type="cpu")
 
-    def _handle_upload(self, request, item_type):
-        file = request.FILES.get("file")
 
-        if not file:
-            return Response(
-                {"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            if file.name.endswith(".csv"):
-                df = pd.read_csv(file)
-            elif file.name.endswith((".xls", ".xlsx", ".ods")):
-                df = pd.read_excel(
-                    file, engine="odf" if file.name.endswith(".ods") else None
-                )
-            else:
-                return Response(
-                    {"error": "Unsupported file type."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            required_columns = {"name", "score"}
-            if not required_columns.issubset(df.columns):
-                return Response(
-                    {"error": "Missing required columns (name, score)."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            with transaction.atomic():
-                for _, row in df.iterrows():
-                    name = row["name"]
-                    score = int(row["score"])
-
-                    CPUBenchmark.objects.update_or_create(
-                        name=name, defaults={"benchmark_score": score}
-                    )
-
-            return Response(
-                {"message": "CPU Benchmark upload successful!"},
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class GPUBenchmarkViewSet(viewsets.ModelViewSet):
-    queryset = GPUBenchmark.objects.all()
+class GPUBenchmarkViewSet(AsynchronousBenchmarkUploadMixin, viewsets.ModelViewSet):
+    queryset = GPUBenchmark.objects.all().order_by("score")
     serializer_class = GPUBenchmarkSerializer
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=["post"], url_path="upload")
     def upload(self, request):
         return self._handle_upload(request, item_type="gpu")
-
-    def _handle_upload(self, request, item_type):
-        file = request.FILES.get("file")
-
-        if not file:
-            return Response(
-                {"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            if file.name.endswith(".csv"):
-                df = pd.read_csv(file)
-            elif file.name.endswith((".xls", ".xlsx", ".ods")):
-                df = pd.read_excel(
-                    file, engine="odf" if file.name.endswith(".ods") else None
-                )
-            else:
-                return Response(
-                    {"error": "Unsupported file type."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            required_columns = {"name", "score"}
-            if not required_columns.issubset(df.columns):
-                return Response(
-                    {"error": "Missing required columns (name, score)."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            with transaction.atomic():
-                for _, row in df.iterrows():
-                    name = row["name"]
-                    score = int(row["score"])
-
-                    GPUBenchmark.objects.update_or_create(
-                        name=name, defaults={"benchmark_score": score}
-                    )
-
-            return Response(
-                {"message": "GPU Benchmark upload successful!"},
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
 
 class ActivityViewSet(viewsets.ModelViewSet):
