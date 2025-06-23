@@ -27,20 +27,26 @@ class Application(models.Model):
 
 
 class CPUBenchmark(models.Model):
-    cpu = models.CharField(max_length=255)  # "Intel Core i7-9700K"
-    cpu_mark = models.CharField(max_length=255)
+    cpu = models.CharField(max_length=255)
+    cpu_mark = models.CharField(
+        max_length=255, null=True, blank=True
+    )  # e.g., "Intel Core i7-10700K"
     score = models.IntegerField()
-    price = models.DecimalField(decimal_places=2, max_digits=65)
+    # Add null=True and blank=True here
+    price = models.DecimalField(decimal_places=2, max_digits=65, null=True, blank=True)
 
     def __str__(self):
         return self.cpu
 
 
 class GPUBenchmark(models.Model):
-    gpu = models.CharField(max_length=255)  # "NVIDIA RTX 3070"
-    gpu_mark = models.CharField(max_length=255)
+    gpu = models.CharField(max_length=255)
+    gpu_mark = models.CharField(
+        max_length=255, null=True, blank=True
+    )  # e.g., "NVIDIA GeForce RTX 3080"
     score = models.IntegerField()
-    price = models.DecimalField(decimal_places=2, max_digits=65)
+    # Add null=True and blank=True here
+    price = models.DecimalField(decimal_places=2, max_digits=65, null=True, blank=True)
 
     def __str__(self):
         return self.gpu

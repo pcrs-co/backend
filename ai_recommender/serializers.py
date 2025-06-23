@@ -11,15 +11,21 @@ import re
 
 
 class CPUBenchmarkSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="cpu")  # Alias
+    benchmark_score = serializers.IntegerField(source="score")  # Alias
+
     class Meta:
         model = CPUBenchmark
-        fields = "__all__"
+        fields = ["id", "name", "benchmark_score", "cpu_mark", "price"]
 
 
 class GPUBenchmarkSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="gpu")  # Alias
+    benchmark_score = serializers.IntegerField(source="score")
+
     class Meta:
         model = GPUBenchmark
-        fields = "__all__"
+        fields = ["id", "name", "benchmark_score", "gpu_mark", "price"]
 
 
 class ActivitySerializer(serializers.ModelSerializer):

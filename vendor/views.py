@@ -5,51 +5,36 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import status, viewsets
 from .serializers import *
 from .models import *
 
 
-class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = "per_page"
-    max_page_size = 100
-
-
 class VendorProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ProductSerializer
-    # Remove the generic queryset = Product.objects.all()
+    # The global paginator will be applied automatically to the list view.
 
     def get_queryset(self):
-        """
-        This view should only return products for the currently authenticated vendor.
-        """
+        """This view should only return products for the currently authenticated vendor."""
         user = self.request.user
         if hasattr(user, "vendor"):
-            return Product.objects.filter(vendor=user.vendor)
-        return Product.objects.none()  # Return no products if user is not a vendor
+            return Product.objects.filter(vendor=user.vendor).order_by("-created_at")
+        return Product.objects.none()
 
     def perform_create(self, serializer):
-        """
-        Automatically associate the new product with the logged-in vendor.
-        """
+        """Automatically associate the new product with the logged-in vendor."""
         if hasattr(self.request.user, "vendor"):
             serializer.save(vendor=self.request.user.vendor)
         else:
-            # This case should ideally not be hit if permissions are set correctly
-            from rest_framework.exceptions import PermissionDenied
-
             raise PermissionDenied(
                 "You do not have a vendor profile to create products."
             )
 
     @action(detail=False, methods=["post"], url_path="upload")
     def upload_products(self, request, *args, **kwargs):
-        """
-        Handles product file upload for the authenticated vendor.
-        No vendor_id is needed in the URL.
-        """
+        """Handles product file upload for the authenticated vendor."""
         user = self.request.user
         if not hasattr(user, "vendor"):
             return Response(
@@ -62,46 +47,34 @@ class VendorProductViewSet(viewsets.ModelViewSet):
                 {"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # We pass the vendor instance to the serializer's save method
         serializer = ProductUploadSerializer(data={"file": file})
-        if serializer.is_valid():
-            serializer.save(vendor=user.vendor)
-            return Response(
-                {"message": "Products uploaded successfully"},
-                status=status.HTTP_201_CREATED,
-            )
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(vendor=user.vendor)
+        return Response(
+            {"message": "Products uploaded successfully"},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class AdminProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated
+    ]  # Should be [IsAdminUser] for better security
     serializer_class = ProductSerializer
-    queryset = Product.objects.all()
-    pagination_class = StandardResultsSetPagination
+    queryset = Product.objects.all().order_by("-created_at")
+    # The global paginator will be applied automatically.
 
     def get_queryset(self):
+        """
+        Admins can filter products by a specific vendor using a query parameter.
+        e.g., /api/admin/products/?vendor_id=123
+        """
         queryset = super().get_queryset()
         vendor_id = self.request.query_params.get("vendor_id")
         if vendor_id:
+            # Use __id for clarity, though just 'vendor' works too
             queryset = queryset.filter(vendor__id=vendor_id)
         return queryset
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(
-                {
-                    "results": serializer.data,
-                    "count": self.paginator.page.paginator.count,
-                }
-            )
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({"results": serializer.data, "count": len(serializer.data)})
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()

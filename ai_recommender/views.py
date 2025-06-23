@@ -21,7 +21,7 @@ import uuid
 
 
 class CPUBenchmarkViewSet(AsynchronousBenchmarkUploadMixin, viewsets.ModelViewSet):
-    queryset = CPUBenchmark.objects.all().order_by("score")
+    queryset = CPUBenchmark.objects.all().order_by("-score")
     serializer_class = CPUBenchmarkSerializer
     permission_classes = [IsAuthenticated]
 
@@ -31,7 +31,7 @@ class CPUBenchmarkViewSet(AsynchronousBenchmarkUploadMixin, viewsets.ModelViewSe
 
 
 class GPUBenchmarkViewSet(AsynchronousBenchmarkUploadMixin, viewsets.ModelViewSet):
-    queryset = GPUBenchmark.objects.all().order_by("score")
+    queryset = GPUBenchmark.objects.all().order_by("-score")
     serializer_class = GPUBenchmarkSerializer
     permission_classes = [IsAuthenticated]
 

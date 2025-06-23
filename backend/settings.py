@@ -214,3 +214,20 @@ CELERY_RESULT_SERIALIZER = "json"
 
 # This sets the timezone for Celery to match your Django project's timezone.
 CELERY_TIMEZONE = TIME_ZONE  # TIME_ZONE should already be defined in your settings
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    # Task 1: Discover new applications for all activities
+    "discover-new-apps-daily": {
+        "task": "ai_recommender.tasks.enrich_all_activities_task",
+        # Runs every day at 2:00 AM
+        "schedule": crontab(hour=2, minute=0),
+    },
+    # Task 2: Update the requirements for old applications
+    "update-stale-requirements-weekly": {
+        "task": "ai_recommender.tasks.update_stale_system_requirements_task",
+        # Runs every Sunday at 4:00 AM
+        "schedule": crontab(hour=4, minute=0, day_of_week="sun"),
+    },
+}
