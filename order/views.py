@@ -93,6 +93,27 @@ class OrderListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        orders = Order.objects.all()
+        """
+        Returns a list of orders based on the user's role:
+        - Admin/Staff: All orders.
+        - Vendor: Orders for their products.
+        - Customer: Orders they have placed.
+        """
+        user = request.user
+
+        if user.is_staff or user.is_superuser:
+            # Admin sees all orders
+            orders = Order.objects.all().order_by("-created_at")
+        elif hasattr(user, "vendor"):
+            # Vendor sees orders related to their products
+            orders = Order.objects.filter(product__vendor=user.vendor).order_by(
+                "-created_at"
+            )
+        else:
+            # Customer sees their own orders
+            orders = Order.objects.filter(user=user).order_by("-created_at")
+
+        # We should use a serializer that provides enough context for the frontend
+        # (e.g., product name, customer email for the admin/vendor view)
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data)

@@ -19,71 +19,59 @@ class StandardResultsSetPagination(PageNumberPagination):
 class VendorProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ProductSerializer
-    queryset = Product.objects.all()
-    pagination_class = StandardResultsSetPagination
+    # Remove the generic queryset = Product.objects.all()
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
+    def get_queryset(self):
+        """
+        This view should only return products for the currently authenticated vendor.
+        """
+        user = self.request.user
+        if hasattr(user, "vendor"):
+            return Product.objects.filter(vendor=user.vendor)
+        return Product.objects.none()  # Return no products if user is not a vendor
 
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(
-                {
-                    "results": serializer.data,
-                    "count": self.paginator.page.paginator.count,
-                }
+    def perform_create(self, serializer):
+        """
+        Automatically associate the new product with the logged-in vendor.
+        """
+        if hasattr(self.request.user, "vendor"):
+            serializer.save(vendor=self.request.user.vendor)
+        else:
+            # This case should ideally not be hit if permissions are set correctly
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied(
+                "You do not have a vendor profile to create products."
             )
 
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({"results": serializer.data, "count": len(serializer.data)})
+    @action(detail=False, methods=["post"], url_path="upload")
+    def upload_products(self, request, *args, **kwargs):
+        """
+        Handles product file upload for the authenticated vendor.
+        No vendor_id is needed in the URL.
+        """
+        user = self.request.user
+        if not hasattr(user, "vendor"):
+            return Response(
+                {"error": "User is not a vendor."}, status=status.HTTP_403_FORBIDDEN
+            )
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        product = serializer.save()
-        return Response(
-            {"message": "Product created successfully", "product": serializer.data},
-            status=status.HTTP_201_CREATED,
-        )
-
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        product = serializer.save()
-        return Response(
-            {"message": "Product updated successfully", "product": serializer.data}
-        )
-
-    @action(detail=False, methods=["post"], url_path="upload/(?P<vendor_id>[^/.]+)")
-    def upload_products(self, request, vendor_id=None):
-        if "file" not in request.FILES:
+        file = request.FILES.get("file")
+        if not file:
             return Response(
                 {"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        file = request.FILES["file"]
+        # We pass the vendor instance to the serializer's save method
         serializer = ProductUploadSerializer(data={"file": file})
-
         if serializer.is_valid():
-            serializer.save(vendor_id=vendor_id)
+            serializer.save(vendor=user.vendor)
             return Response(
-                {
-                    "message": "Products uploaded successfully",
-                    "count": (
-                        serializer.instance.count()
-                        if hasattr(serializer, "instance")
-                        else 0
-                    ),
-                },
+                {"message": "Products uploaded successfully"},
                 status=status.HTTP_201_CREATED,
             )
 
-        return Response(
-            {"error": "Upload failed", "details": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AdminProductViewSet(viewsets.ModelViewSet):
