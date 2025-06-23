@@ -12,6 +12,13 @@ import random
 import re
 
 
+# Create a small, reusable serializer for the user data
+class UserNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ["username", "email"]
+
+
 class CustomerProfileSerializer(serializers.ModelSerializer):
     """
     Handles the fields specific to the Customer profile.
@@ -111,17 +118,14 @@ class CustomerListSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "first_name", "last_name", "email", "phone_number"]
 
 
-class CustomerListSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomUser
-        fields = "__all__"
-
-
 class VendorListSerializer(serializers.ModelSerializer):
     """
     A lightweight serializer for listing vendors in the admin panel.
     Uses 'source' to pull data from the related user model.
     """
+
+    # This line tells DRF to use the UserNestedSerializer for the 'user' field
+    user = UserNestedSerializer(read_only=True)
 
     email = serializers.EmailField(source="user.email", read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
@@ -138,6 +142,7 @@ class VendorListSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "phone_number",
+            "user",
         ]
 
 

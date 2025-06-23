@@ -1,8 +1,10 @@
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group
+from login_and_register.serializers import VendorSerializer
 from login_and_register.models import *
 from django.core.mail import send_mail
 from rest_framework import serializers
+from django.db import transaction
 from io import BytesIO
 from .models import *
 import pandas as pd
@@ -11,26 +13,10 @@ import random
 import re
 
 
-class VendorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Vendor
-        fields = [
-            "id",
-            "company_name",
-            "location",
-            "email",
-            "phone_number",
-            "avatar",  # Optional: if using logo/image
-        ]
-
-
 class ProcessorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Processor
         fields = "__all__"
-
-    def create(self, validated_data):
-        return Processor.objects.create(**validated_data)
 
 
 class MemorySerializer(serializers.ModelSerializer):
@@ -38,17 +24,11 @@ class MemorySerializer(serializers.ModelSerializer):
         model = Memory
         fields = "__all__"
 
-    def create(self, validated_data):
-        return Memory.objects.create(**validated_data)
-
 
 class StorageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Storage
         fields = "__all__"
-
-    def create(self, validated_data):
-        return Storage.objects.create(**validated_data)
 
 
 class GraphicSerializer(serializers.ModelSerializer):
@@ -56,17 +36,11 @@ class GraphicSerializer(serializers.ModelSerializer):
         model = Graphic
         fields = "__all__"
 
-    def create(self, validated_data):
-        return Graphic.objects.create(**validated_data)
-
 
 class DisplaySerializer(serializers.ModelSerializer):
     class Meta:
         model = Display
         fields = "__all__"
-
-    def create(self, validated_data):
-        return Display.objects.create(**validated_data)
 
 
 class PortsConnectivitySerializer(serializers.ModelSerializer):
@@ -74,17 +48,11 @@ class PortsConnectivitySerializer(serializers.ModelSerializer):
         model = PortsConnectivity
         fields = "__all__"
 
-    def create(self, validated_data):
-        return PortsConnectivity.objects.create(**validated_data)
-
 
 class PowerBatterySerializer(serializers.ModelSerializer):
     class Meta:
         model = PowerBattery
         fields = "__all__"
-
-    def create(self, validated_data):
-        return PowerBattery.objects.create(**validated_data)
 
 
 class CoolingSerializer(serializers.ModelSerializer):
@@ -92,17 +60,11 @@ class CoolingSerializer(serializers.ModelSerializer):
         model = Cooling
         fields = "__all__"
 
-    def create(self, validated_data):
-        return CoolingSerializer.objects.create(**validated_data)
-
 
 class OperatingSystemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OperatingSystem
         fields = "__all__"
-
-    def create(self, validated_data):
-        return OperatingSystemSerializer.objects.create(**validated_data)
 
 
 class FormFactorSerializer(serializers.ModelSerializer):
@@ -110,17 +72,11 @@ class FormFactorSerializer(serializers.ModelSerializer):
         model = FormFactor
         fields = "__all__"
 
-    def create(self, validated_data):
-        return FormFactorSerializer.objects.create(**validated_data)
-
 
 class ExtraSerializer(serializers.ModelSerializer):
     class Meta:
         model = Extra
         fields = "__all__"
-
-    def create(self, validated_data):
-        return ExtraSerializer.objects.create(**validated_data)
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -185,77 +141,30 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return product
 
+    # In vendor/serializers.py, inside ProductSerializer
+
     def update(self, instance, validated_data):
-        # Extract nested data
-        processor_data = validated_data.pop("processor", None)
-        memory_data = validated_data.pop("memory", None)
-        storage_data = validated_data.pop("storage", None)
-        graphic_data = validated_data.pop("graphic", None)
-        display_data = validated_data.pop("display", None)
-        ports_data = validated_data.pop("ports", None)
-        battery_data = validated_data.pop("battery", None)
-        cooling_data = validated_data.pop("cooling", None)
-        os_data = validated_data.pop("operating_system", None)
-        form_data = validated_data.pop("form_factor", None)
-        extra_data = validated_data.pop("extra", None)
+        # A mapping of field names to their data and instance objects
+        nested_fields = {
+            "processor": (validated_data.pop("processor", None), instance.processor),
+            "memory": (validated_data.pop("memory", None), instance.memory),
+            "storage": (validated_data.pop("storage", None), instance.storage),
+            "graphic": (validated_data.pop("graphic", None), instance.graphic),
+            "display": (validated_data.pop("display", None), instance.display),
+            "ports": (validated_data.pop("ports", None), instance.ports),
+            "battery": (validated_data.pop("battery", None), instance.battery),
+            # ... add all other nested fields here
+        }
 
-        # Update or replace nested specs
-        if processor_data:
-            for attr, value in processor_data.items():
-                setattr(instance.processor, attr, value)
-            instance.processor.save()
+        # Loop through the nested fields and update them dynamically
+        for field_name, (data, nested_instance) in nested_fields.items():
+            if data and nested_instance:
+                for attr, value in data.items():
+                    setattr(nested_instance, attr, value)
+                nested_instance.save()
 
-        if memory_data:
-            for attr, value in memory_data.items():
-                setattr(instance.memory, attr, value)
-            instance.memory.save()
-
-        if storage_data:
-            for attr, value in storage_data.items():
-                setattr(instance.storage, attr, value)
-            instance.storage.save()
-
-        if graphic_data:
-            for attr, value in graphic_data.items():
-                setattr(instance.graphic, attr, value)
-            instance.graphic.save()
-
-        if display_data:
-            for attr, value in display_data.items():
-                setattr(instance.display, attr, value)
-            instance.display.save()
-
-        if ports_data:
-            for attr, value in ports_data.items():
-                setattr(instance.ports, attr, value)
-            instance.ports.save()
-
-        if battery_data:
-            for attr, value in battery_data.items():
-                setattr(instance.battery, attr, value)
-            instance.battery.save()
-
-        if cooling_data:
-            for attr, value in cooling_data.items():
-                setattr(instance.cooling, attr, value)
-            instance.cooling.save()
-
-        if os_data:
-            for attr, value in os_data.items():
-                setattr(instance.operating_system, attr, value)
-            instance.operating_system.save()
-
-        if form_data:
-            for attr, value in form_data.items():
-                setattr(instance.form_factor, attr, value)
-            instance.form_factor.save()
-
-        if extra_data:
-            for attr, value in extra_data.items():
-                setattr(instance.extra, attr, value)
-            instance.extra.save()
-
-        # Update Product fields
+        # Update the main Product fields
+        # This part remains the same
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
