@@ -1,46 +1,45 @@
+# ai_recommender/logic/enrich_app_data.py
+
 from ..models import Application, ApplicationSystemRequirement, Activity
-from .ai_scraper import ask_openai
-from .ai_extractor import extract_requirements_from_response
+from .ai_scraper import query_all_ais # Updated import
+from .ai_extractor import find_consensus_response # Updated import
 from .utils import get_cpu_score, get_gpu_score
 
-
 def enrich_application(application_name, activity_name=None):
-    # Check if app exists
     app = Application.objects.filter(name__iexact=application_name).first()
     if app:
         return app  # No need to enrich again
 
-    # Prompt AI
+    # --- KEY CHANGE: Use the multi-AI workflow ---
     prompt = f"""
-Give me the system requirements for the application: {application_name}. 
-Include both minimum and recommended specs, with CPU, GPU, RAM (in GB), Storage (in GB), and a source URL.
-Structure your answer in JSON like this:
+Give me the system requirements for the application: "{application_name}". 
+Provide both "minimum" and "recommended" specifications.
+Your response MUST be a single, valid JSON object with the following structure. Do not add any text before or after the JSON.
 {{
-  "name": "App Name",
-  "source": "...",
-  "intensity_level": "low/medium/high",
+  "name": "Corrected App Name",
+  "source": "A valid URL to the official requirements page",
+  "intensity_level": "low, medium, or high",
   "requirements": [
     {{
-      "type": "minimum",
-      "cpu": "...",
-      "gpu": "...",
-      "ram": 8,
-      "storage": 10
+      "type": "minimum", "cpu": "e.g., Intel Core i5-6600K", "gpu": "e.g., NVIDIA GeForce GTX 970", "ram": 8, "storage": 50
     }},
     {{
-      "type": "recommended",
-      "cpu": "...",
-      "gpu": "...",
-      "ram": 16,
-      "storage": 20
+      "type": "recommended", "cpu": "e.g., Intel Core i7-8700K", "gpu": "e.g., NVIDIA GeForce GTX 1080 Ti", "ram": 16, "storage": 50
     }}
   ]
 }}
 """
-    raw_response = ask_openai(prompt)
-    structured = extract_requirements_from_response(raw_response)
+    # Query all AIs and get a list of raw string responses
+    raw_responses = query_all_ais(prompt)
+    
+    # Find the best response through consensus
+    try:
+        structured = find_consensus_response(raw_responses)
+    except ValueError as e:
+        print(f"Could not enrich application '{application_name}': {e}")
+        return None # Or raise an exception to signal failure
+    # --- END OF KEY CHANGE ---
 
-    # Get or create the Activity
     activity = None
     if activity_name:
         activity, _ = Activity.objects.get_or_create(
@@ -49,22 +48,19 @@ Structure your answer in JSON like this:
     elif Activity.objects.exists():
         activity = Activity.objects.first()
 
-    # Save the Application
     app = Application.objects.create(
-        name=structured["name"],
+        name=structured.get("name", application_name), # Use AI's corrected name
         source=structured.get("source"),
         intensity_level=structured.get("intensity_level", "medium"),
         activity=activity,
     )
 
-    # Save each Requirement with benchmark scores
-    for req in structured["requirements"]:
+    for req in structured.get("requirements", []):
         cpu = req.get("cpu")
         gpu = req.get("gpu")
-
         ApplicationSystemRequirement.objects.create(
             application=app,
-            type=req["type"],
+            type=req.get("type"),
             cpu=cpu,
             gpu=gpu,
             cpu_score=get_cpu_score(cpu),
