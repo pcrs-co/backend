@@ -204,10 +204,6 @@ class UpdateCustomerSerializer(serializers.ModelSerializer):
             "region",
             "district",
         ]
-        # --- THIS IS THE FIX ---
-        # Mark the username as read-only. An admin can see it, but not change it.
-        # This prevents accidental changes and is a common source of validation errors.
-        read_only_fields = ['username']
 
 
 class VendorListSerializer(serializers.ModelSerializer):

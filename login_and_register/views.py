@@ -68,21 +68,28 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 class CustomerViewSet(viewsets.ModelViewSet):
     """Admin-only viewset for managing all CUSTOMER accounts."""
-
-    queryset = CustomUser.objects.filter(groups__name="customer").order_by(
-        "-date_joined"
-    )
-    permission_classes = [IsAuthenticated]  # Should be IsAdminUser
+    queryset = CustomUser.objects.filter(groups__name="customer").order_by("-date_joined")
+    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
-        if self.action == "list":
+        # --- THIS IS THE FULLY CORRECTED LOGIC ---
+        
+        # For listing multiple customers, use the lightweight list serializer.
+        if self.action == 'list':
             return CustomerListSerializer
-        # --- THIS IS THE FIX ---
-        if self.action in ["update", "partial_update"]:
-            return UpdateCustomerSerializer  # Use the simple serializer for updates
-        # For 'create' (registration) use the full UserSerializer
-        return UserSerializer
-
+        
+        # For updating an existing customer, use the simple update serializer.
+        if self.action in ['update', 'partial_update']:
+            return UpdateCustomerSerializer
+        
+        # For creating a NEW customer (if you allow it via this ViewSet), use the full UserSerializer.
+        if self.action == 'create':
+            return UserSerializer
+            
+        # For retrieving a SINGLE customer's details (the GET request),
+        # use the powerful UserDetailSerializer we made for profiles.
+        # This will now be the default for any other action, including 'retrieve'.
+        return UserDetailSerializer
 
 class VendorViewSet(viewsets.ModelViewSet):
     """Admin-only viewset for managing all VENDOR accounts."""
