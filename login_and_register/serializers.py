@@ -1,5 +1,6 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
+from rest_framework.validators import UniqueValidator
 from django.contrib.auth.models import Group
 from django.core.mail import send_mail
 from rest_framework import serializers
@@ -136,6 +137,25 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UpdateUserSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(
+        required=True,
+        validators=[
+            UniqueValidator(
+                queryset=CustomUser.objects.all(),
+                message="A user with this email already exists.",
+            )
+        ],
+    )
+    username = serializers.CharField(
+        required=True,
+        validators=[
+            UniqueValidator(
+                queryset=CustomUser.objects.all(),
+                message="A user with this username already exists.",
+            )
+        ],
+    )
+
     class Meta:
         model = CustomUser
         # List only the fields an admin should be able to change on the user model.
