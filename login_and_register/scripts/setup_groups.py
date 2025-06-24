@@ -10,7 +10,7 @@ def create_default_groups():
         "vendor": {
             "permissions": [],
         },
-        "default": {
+        "customer": {
             "permissions": [],
         },
     }

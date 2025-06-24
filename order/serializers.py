@@ -3,6 +3,13 @@ from .models import *
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    action = serializers.ChoiceField(
+        choices=["confirm", "cancel"],
+        write_only=True,
+        required=False,
+        help_text="Send 'confirm' or 'cancel' to change order status.",
+    )
+
     class Meta:
         model = Order
         fields = [
@@ -14,57 +21,46 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "modified_at",
+            "action",
         ]
-        read_only_fields = ["status", "created_at", "modified_at"]
+        read_only_fields = ["status", "user", "vendor", "created_at", "modified_at"]
 
     def create(self, validated_data):
+        # --- CHANGE START ---
+        # FIX: The serializer now delegates the entire creation process to the model manager.
+        # This is much cleaner and respects the "Fat Model, Thin Serializer" pattern.
+        user = self.context["request"].user
         product = validated_data["product"]
         quantity = validated_data["quantity"]
 
-        # Check if enough stock is available (considering pending orders)
-        if product.quantity - product.pending_quantity < quantity:
-            raise serializers.ValidationError("Not enough stock available.")
-
-        # Reserve stock as pending
-        product.pending_quantity += quantity
-        product.save()
-
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        old_status = instance.status
-        new_status = validated_data.get("status", old_status)
-
-        if old_status != "confirmed" and new_status == "confirmed":
-            product = instance.product
-            quantity_requested = instance.quantity
-
-            if product.quantity < quantity_requested:
-                raise serializers.ValidationError(
-                    "Not enough stock to confirm this order."
-                )
-
-            # Now we actually reduce stock
-            product.quantity -= quantity_requested
-            product.save()
-
-        return super().update(instance, validated_data)
-
-
-class OrderStatusUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Order
-        fields = ["status"]
+        try:
+            # Call our new, safe creation method.
+            order = Order.objects.create_order(
+                user=user, product=product, quantity=quantity
+            )
+            return order
+        except ValidationError as e:
+            # Pushing for errors: Catch the specific error from the manager and
+            # convert it into a DRF-friendly validation error.
+            raise serializers.ValidationError({"detail": e.message})
+        # --- CHANGE END ---
 
     def update(self, instance, validated_data):
-        new_status = validated_data.get("status")
-        if instance.status != "pending":
-            raise serializers.ValidationError("Only pending orders can be updated.")
+        # FIX: The update logic is now streamlined to handle actions.
+        action = validated_data.get("action")
 
-        if new_status == "confirmed":
-            instance.confirm()
-        elif new_status == "cancelled":
-            instance.cancel()
-        else:
-            raise serializers.ValidationError("Invalid status transition.")
+        # If no action is provided, we assume other fields might be updated (not typical for orders).
+        # We will simply pass through to the parent.
+        if not action:
+            return super().update(instance, validated_data)
+
+        try:
+            if action == "confirm":
+                instance.confirm()
+            elif action == "cancel":
+                instance.cancel()
+        except Exception as e:
+            # Pushing for errors: Catch exceptions from the model and raise a validation error.
+            raise serializers.ValidationError({"detail": str(e)})
+
         return instance

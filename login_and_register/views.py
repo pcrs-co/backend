@@ -1,23 +1,12 @@
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework import viewsets
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from .models import CustomUser, Vendor
+from rest_framework import viewsets
 from rest_framework import generics
 from rest_framework import status
-
-# Import only the serializers you will actually use in this file
-from .serializers import (
-    CustomTokenObtainPairSerializer,
-    UserSerializer,  # For customer registration
-    VendorSerializer,  # For admin creation of vendors
-    UserDetailSerializer,  # For the unified profile view
-    VendorListSerializer,  # For the admin vendor list
-    CustomerListSerializer,  # For the admin customer list
-    UpdateVendorSerializer,  # For updating vendor profiles
-    UpdateCustomerSerializer,  # For updating customer profiles
-)
-from .models import CustomUser, Vendor
+from .serializers import *
 
 # ===================================================================
 # 1. AUTHENTICATION & REGISTRATION
@@ -59,43 +48,34 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
-# The old, separate CustomerProfileView and VendorProfileView are now REMOVED.
-
 # ===================================================================
 # 3. ADMIN MANAGEMENT VIEWS (No changes needed here, just confirming)
 # ===================================================================
 
 
-class CustomerViewSet(viewsets.ModelViewSet):
+class CustomerManagementViewSet(viewsets.ModelViewSet):
     """Admin-only viewset for managing all CUSTOMER accounts."""
-    queryset = CustomUser.objects.filter(groups__name="customer").order_by("-date_joined")
-    permission_classes = [IsAuthenticated]
+
+    queryset = CustomUser.objects.filter(groups__name="customer").order_by(
+        "-date_joined"
+    )
+    permission_classes = [IsAdminUser]
 
     def get_serializer_class(self):
         # --- THIS IS THE FULLY CORRECTED LOGIC ---
-        
+
         # For listing multiple customers, use the lightweight list serializer.
-        if self.action == 'list':
-            return CustomerListSerializer
-        
-        # For updating an existing customer, use the simple update serializer.
-        if self.action in ['update', 'partial_update']:
-            return UpdateCustomerSerializer
-        
-        # For creating a NEW customer (if you allow it via this ViewSet), use the full UserSerializer.
-        if self.action == 'create':
-            return UserSerializer
-            
-        # For retrieving a SINGLE customer's details (the GET request),
-        # use the powerful UserDetailSerializer we made for profiles.
-        # This will now be the default for any other action, including 'retrieve'.
+        if self.action in ["update", "partial_update"]:
+            # For updating, use the specific, limited UpdateUserSerializer.
+            return UpdateUserSerializer
         return UserDetailSerializer
+
 
 class VendorViewSet(viewsets.ModelViewSet):
     """Admin-only viewset for managing all VENDOR accounts."""
 
     queryset = Vendor.objects.select_related("user").all().order_by("-created_at")
-    permission_classes = [IsAuthenticated]  # Should be IsAdminUser
+    permission_classes = [IsAdminUser]  # Should be IsAdminUser
 
     def get_serializer_class(self):
         if self.action == "list":

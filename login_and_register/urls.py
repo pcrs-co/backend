@@ -6,7 +6,7 @@ from rest_framework.routers import DefaultRouter
 # Create a router for ViewSets
 router = DefaultRouter()
 router.register(r"admin/vendors", VendorViewSet, basename="vendor")
-router.register(r"admin/customers", CustomerViewSet, basename="customer")
+router.register(r"admin/customers", CustomerManagementViewSet, basename="customer")
 
 urlpatterns = [
     path("token/", CustomTokenObtainPairView.as_view(), name="get_token"),

@@ -37,78 +37,52 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
-            "role",  # Read-only
-            "vendor_profile_read",  # Read-only representation of vendor data
-            "vendor_profile_write",  # Write-only field for receiving vendor updates
+            "role",
+            "middle_name",
+            "date_of_birth",
+            "avatar",
+            "phone_number",
+            "region",
+            "district",
+            "vendor_profile_read",
+            "vendor_profile_write",
             "date_joined",
         ]
         read_only_fields = ["username", "date_joined", "role", "vendor_profile_read"]
 
     def get_role(self, obj):
-        """Determines the user's primary role."""
         if obj.is_superuser or obj.is_staff:
             return "admin"
+        # --- CHANGE START ---
+        # FIX: This now correctly checks for the 'vendor' related object.
         if hasattr(obj, "vendor"):
             return "vendor"
+        # --- CHANGE END ---
         return "customer"
 
     def update(self, instance, validated_data):
-        """Handle updates for both CustomUser and the nested Vendor profile."""
-        # Pop the vendor data before calling the parent update method
         vendor_data = validated_data.pop("vendor_profile_write", None)
-
-        # Update the CustomUser fields (first_name, last_name, etc.)
         instance = super().update(instance, validated_data)
 
-        # If vendor data was provided and the user is a vendor, update the vendor profile
+        # --- CHANGE START ---
+        # FIX: Updated to use the simpler 'vendor' attribute.
         if vendor_data and hasattr(instance, "vendor"):
             vendor_profile = instance.vendor
-            # Assuming vendor_data is a dict like {'company_name': 'New Name'}
             for attr, value in vendor_data.items():
                 setattr(vendor_profile, attr, value)
             vendor_profile.save()
-
+        # --- CHANGE END ---
         return instance
 
     def to_representation(self, instance):
-        """
-        Custom representation to rename `vendor_profile_read` to `vendor_profile`
-        for a cleaner frontend experience.
-        """
         representation = super().to_representation(instance)
-        # The write-only field won't be in the output, so we don't need to pop it.
         representation["vendor_profile"] = representation.pop(
             "vendor_profile_read", None
         )
         return representation
 
 
-# Create a small, reusable serializer for the user data
-class UserNestedSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomUser
-        fields = ["username", "email"]
-
-
-class CustomerProfileSerializer(serializers.ModelSerializer):
-    """
-    Handles the fields specific to the Customer profile.
-    """
-
-    class Meta:
-        model = Customer
-        fields = ["middle_name", "date_of_birth", "avatar"]
-
-
 class UserSerializer(serializers.ModelSerializer):
-    """
-    Handles the creation and updating of a CustomUser and their linked Customer profile.
-    This is for standard user/customer registration.
-    """
-
-    # From Customer profile model, but handled here for convenience
-    customer_profile = CustomerProfileSerializer(required=False)
-
     password2 = serializers.CharField(write_only=True, required=True)
 
     class Meta:
@@ -122,7 +96,9 @@ class UserSerializer(serializers.ModelSerializer):
             "phone_number",
             "region",
             "district",
-            "customer_profile",
+            "middle_name",
+            "date_of_birth",
+            "avatar",
             "password",
             "password2",
         ]
@@ -149,48 +125,17 @@ class UserSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        customer_data = validated_data.pop("customer_profile", {})
-
+        # --- CHANGE START ---
+        # FIX: The creation logic is dramatically simplified. No more popping customer data.
         with transaction.atomic():
             user = CustomUser.objects.create_user(**validated_data)
-
-            # Create the customer profile linked to the new user
-            Customer.objects.create(user=user, **customer_data)
-
-            # Add user to the 'customer' group (or 'default')
             customer_group, _ = Group.objects.get_or_create(name="customer")
             user.groups.add(customer_group)
-
         return user
-
-    def update(self, instance, validated_data):
-        customer_data = validated_data.pop("customer_profile", {})
-        customer_profile = instance.customer_profile
-
-        # Update the CustomUser instance
-        instance = super().update(instance, validated_data)
-
-        # Update the nested CustomerProfile instance
-        if customer_data:
-            for attr, value in customer_data.items():
-                setattr(customer_profile, attr, value)
-            customer_profile.save()
-
-        return instance
+        # --- CHANGE END ---
 
 
-class CustomerListSerializer(serializers.ModelSerializer):
-    """
-    A lightweight serializer for listing customers in the admin panel.
-    """
-
-    class Meta:
-        model = CustomUser
-        fields = ["id", "username", "first_name", "last_name", "email", "phone_number"]
-
-
-# New serializer specifically for an admin updating a customer's user profile.
-class UpdateCustomerSerializer(serializers.ModelSerializer):
+class UpdateUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         # List only the fields an admin should be able to change on the user model.
@@ -203,7 +148,17 @@ class UpdateCustomerSerializer(serializers.ModelSerializer):
             "phone_number",
             "region",
             "district",
+            "middle_name",
+            "date_of_birth",
+            "avatar",
         ]
+
+
+# Create a small, reusable serializer for the user data
+class UserNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ["username", "email"]
 
 
 class VendorListSerializer(serializers.ModelSerializer):

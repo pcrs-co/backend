@@ -1,6 +1,34 @@
-from django.db import models
 from login_and_register.models import CustomUser, Vendor
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from vendor.models import Product
+
+
+class OrderManager(models.Manager):
+    """Custom manager for the Order model to encapsulate creation logic."""
+
+    def create_order(self, user, product, quantity):
+        """
+        Creates a new order after validating stock and creating a pending reservation.
+        This is the single, authoritative method for creating an order.
+        """
+        if product.quantity - product.pending_quantity < quantity:
+            # Pushing for errors: Raise a specific, clear error.
+            raise ValidationError("Not enough stock available to place this order.")
+
+        with transaction.atomic():
+            # Reserve stock as pending.
+            product.pending_quantity += quantity
+            product.save(update_fields=["pending_quantity"])
+
+            # Create the order object.
+            order = self.create(
+                user=user,
+                product=product,
+                vendor=product.vendor,  # Vendor is derived from the product.
+                quantity=quantity,
+            )
+            return order
 
 
 class Order(models.Model):
@@ -36,25 +64,39 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        if not self.pk:  # only when new
-            if self.product.quantity - self.product.pending_quantity < self.quantity:
-                raise ValueError("Not enough stock available.")
-            self.product.pending_quantity += self.quantity
-            self.product.save()
-        super().save(*args, **kwargs)
-
     def confirm(self):
-        if self.status == "pending":
-            self.product.quantity -= self.quantity
-            self.product.pending_quantity -= self.quantity
-            self.product.save()
+        """Confirms an order, moving stock from pending to sold. Pushes for errors."""
+        if self.status != "pending":
+            raise ValidationError("Only pending orders can be confirmed.")
+
+        with transaction.atomic():
+            # Lock the product row to prevent race conditions during confirmation.
+            product = Product.objects.select_for_update().get(id=self.product.id)
+
+            # Check if there's enough stock to fulfill the order *now*.
+            if product.quantity < self.quantity:
+                raise ValidationError(
+                    f"Not enough stock for {product.name} to confirm order."
+                )
+
+            # Decrement actual stock AND the pending reservation.
+            product.quantity -= self.quantity
+            product.pending_quantity -= self.quantity
+            product.save()
+
             self.status = "confirmed"
-            self.save()
+            self.save(update_fields=["status", "modified_at"])
 
     def cancel(self):
-        if self.status == "pending":
-            self.product.pending_quantity -= self.quantity
-            self.product.save()
+        """Cancels a pending order, releasing the reserved stock. Pushes for errors."""
+        if self.status != "pending":
+            raise ValidationError("Only pending orders can be cancelled.")
+
+        with transaction.atomic():
+            product = Product.objects.select_for_update().get(id=self.product.id)
+            # Release the pending quantity.
+            product.pending_quantity -= self.quantity
+            product.save()
+
             self.status = "cancelled"
-            self.save()
+            self.save(update_fields=["status", "modified_at"])

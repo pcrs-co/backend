@@ -1,3 +1,4 @@
+from drf_writable_nested.serializers import WritableNestedModelSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group
 from login_and_register.serializers import VendorSerializer
@@ -79,7 +80,7 @@ class ExtraSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class ProductSerializer(serializers.ModelSerializer):
+class ProductSerializer(WritableNestedModelSerializer):
     processor = ProcessorSerializer()
     memory = MemorySerializer()
     storage = StorageSerializer()
@@ -96,170 +97,135 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = "__all__"
 
-    def create(self, validated_data):
-        # Extract nested spec data
-        processor_data = validated_data.pop("processor")
-        ram_data = validated_data.pop("ram")
-        storage_data = validated_data.pop("storage")
-        graphic_data = validated_data.pop("graphic")
-        display_data = validated_data.pop("display")
-        ports_data = validated_data.pop("ports")
-        battery_data = validated_data.pop("battery")
-        cooling_data = validated_data.pop("cooling")
-        os_data = validated_data.pop("operating_system")
-        form_data = validated_data.pop("form_factor")
-        extra_data = validated_data.pop("extra")
-
-        # Create nested objects
-        processor = Processor.objects.create(**processor_data)
-        memory = Memory.objects.create(**ram_data)
-        storage = Storage.objects.create(**storage_data)
-        graphic = Graphic.objects.create(**graphic_data)
-        display = Display.objects.create(**display_data)
-        ports = PortsConnectivity.objects.create(**ports_data)
-        battery = PowerBattery.objects.create(**battery_data)
-        cooling = Cooling.objects.create(**cooling_data)
-        os = OperatingSystem.objects.create(**os_data)
-        form = FormFactor.objects.create(**form_data)
-        extra = Extra.objects.create(**extra_data)
-
-        # Create the product
-        product = Product.objects.create(
-            processor=processor,
-            memory=memory,
-            storage=storage,
-            graphic=graphic,
-            display=display,
-            ports=ports,
-            battery=battery,
-            cooling=cooling,
-            operating_system=os,
-            form_factor=form,
-            extra=extra,
-            **validated_data,
-        )
-
-        return product
-
-    # In vendor/serializers.py, inside ProductSerializer
-
-    def update(self, instance, validated_data):
-        # A mapping of field names to their data and instance objects
-        nested_fields = {
-            "processor": (validated_data.pop("processor", None), instance.processor),
-            "memory": (validated_data.pop("memory", None), instance.memory),
-            "storage": (validated_data.pop("storage", None), instance.storage),
-            "graphic": (validated_data.pop("graphic", None), instance.graphic),
-            "display": (validated_data.pop("display", None), instance.display),
-            "ports": (validated_data.pop("ports", None), instance.ports),
-            "battery": (validated_data.pop("battery", None), instance.battery),
-            # ... add all other nested fields here
-        }
-
-        # Loop through the nested fields and update them dynamically
-        for field_name, (data, nested_instance) in nested_fields.items():
-            if data and nested_instance:
-                for attr, value in data.items():
-                    setattr(nested_instance, attr, value)
-                nested_instance.save()
-
-        # Update the main Product fields
-        # This part remains the same
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-
-        instance.save()
-        return instance
-
 
 class ProductUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
+    """
+    Handles the validation and processing of an uploaded spreadsheet (CSV, Excel)
+    to bulk-create products for a specific vendor.
+
+    This serializer is designed for performance by using in-memory caching for
+    component lookups and a single bulk_create query for all new products.
+    """
+
+    file = serializers.FileField(write_only=True)
 
     def validate_file(self, value):
-        if not value.name.endswith((".csv", ".xls", ".xlsx", ".ods")):
+        """
+        Ensures the uploaded file is of a supported spreadsheet format.
+        """
+        # Pushing for errors: Be strict about supported file types.
+        supported_extensions = [".csv", ".xls", ".xlsx"]
+        if not any(value.name.lower().endswith(ext) for ext in supported_extensions):
             raise serializers.ValidationError(
-                "Unsupported file format. Please upload a CSV, Excel, or ODS file."
+                "Unsupported file format. Please upload a CSV or Excel file (.xls, .xlsx)."
             )
         return value
 
-    def save(self, vendor_id):
+    @transaction.atomic
+    def save(self, vendor):
+        """
+        Processes the validated file to create products in bulk.
+
+        Args:
+            vendor (Vendor): The vendor instance to which the new products will be associated.
+
+        Returns:
+            int: The number of products successfully created.
+        """
         file = self.validated_data["file"]
 
-        # Read the file
-        if file.name.endswith(".csv"):
-            df = pd.read_csv(file, encoding="utf-8")
-        elif file.name.endswith((".xls", ".xlsx", ".ods")):
-            df = pd.read_excel(
-                file, engine="odf" if file.name.endswith(".ods") else None
-            )
+        # --- 1. READ FILE INTO PANDAS DATAFRAME ---
+        try:
+            if file.name.lower().endswith(".csv"):
+                df = pd.read_csv(file, encoding="utf-8")
+            else:
+                df = pd.read_excel(file)
+            # Standardize missing data to empty strings for consistency
+            df.fillna("", inplace=True)
+        except Exception as e:
+            # Pushing for errors: Handle file reading errors gracefully.
+            raise serializers.ValidationError(f"Could not read the file: {e}")
 
-        # Normalize missing values
-        df.fillna("", inplace=True)
+        # --- 2. PREPARE FOR BULK PROCESSING ---
+        products_to_create = []
 
-        # Fetch vendor
-        vendor = Vendor.objects.get(id=vendor_id)
+        # In-memory cache to avoid repeated database hits for the same component
+        # within a single file upload. E.g., if 20 laptops have the same "Intel Core i7" CPU.
+        component_cache = {}
 
+        # Map spreadsheet column names to their corresponding model and field.
+        # This makes the loop below cleaner and easier to maintain.
+        component_map = {
+            "processor": (Processor, "processor"),
+            "memory": (Memory, "memory"),
+            "storage": (Storage, "storage"),
+            "graphic": (Graphic, "graphic"),
+            "display": (Display, "display"),
+            "ports": (PortsConnectivity, "ports"),
+            "battery": (PowerBattery, "battery"),
+            "cooling": (Cooling, "cooling"),
+            "os": (OperatingSystem, "operating_system"),
+            "formfactor": (FormFactor, "form_factor"),
+            "extra": (Extra, "extra"),
+        }
+
+        # --- 3. PROCESS EACH ROW IN MEMORY ---
         for index, row in df.iterrows():
             try:
-                processor, _ = Processor.objects.get_or_create(
-                    data_received=row.get("processor", "")
-                )
-                memory, _ = Memory.objects.get_or_create(
-                    data_received=row.get("memory", "")
-                )
-                storage, _ = Storage.objects.get_or_create(
-                    data_received=row.get("storage", "")
-                )
-                graphic, _ = Graphic.objects.get_or_create(
-                    data_received=row.get("graphic", "")
-                )
-                display, _ = Display.objects.get_or_create(
-                    data_received=row.get("display", "")
-                )
-                ports, _ = PortsConnectivity.objects.get_or_create(
-                    data_received=row.get("ports", "")
-                )
-                battery, _ = PowerBattery.objects.get_or_create(
-                    data_received=row.get("battery", "")
-                )
-                cooling, _ = Cooling.objects.get_or_create(
-                    data_received=row.get("cooling", "")
-                )
-                operating_system, _ = OperatingSystem.objects.get_or_create(
-                    data_received=row.get("os", "")
-                )
-                form_factor, _ = FormFactor.objects.get_or_create(
-                    data_received=row.get("formfactor", "")
-                )
-                extra, _ = Extra.objects.get_or_create(
-                    data_received=row.get("extra", "")
-                )
+                product_components = {}
 
-                # Create product
-                product = Product.objects.create(
-                    name=row.get("product_name", ""),
-                    price=row.get("price", 0),
-                    brand=row.get("brand", ""),
-                    product_type=row.get("product_type", ""),
-                    processor=processor,
-                    memory=memory,
-                    storage=storage,
-                    graphic=graphic,
-                    display=display,
-                    ports=ports,
-                    battery=battery,
-                    cooling=cooling,
-                    operating_system=operating_system,
-                    form_factor=form_factor,
-                    extra=extra,
+                # Loop through our component map to get/create each component instance.
+                for col_name, (model, field_name) in component_map.items():
+                    component_name = str(row.get(col_name, "")).strip()
+                    cache_key = (model, component_name)
+
+                    if cache_key in component_cache:
+                        # Use the cached object if we've seen this component before.
+                        component_instance = component_cache[cache_key]
+                    else:
+                        # If not cached, hit the database once and then cache the result.
+                        component_instance, _ = model.objects.get_or_create(
+                            data_received=component_name
+                        )
+                        component_cache[cache_key] = component_instance
+
+                    product_components[field_name] = component_instance
+
+                # Instantiate the Product object in memory without saving it to the DB yet.
+                product_instance = Product(
+                    name=row.get("product_name", "Unnamed Product"),
+                    price=pd.to_numeric(row.get("price"), errors="coerce") or 0.0,
+                    brand=row.get("brand", "Unknown Brand"),
+                    product_type=row.get("product_type", "uncategorized"),
                     vendor=vendor,
+                    **product_components,  # Unpack all the component instances
                 )
-                product.save()
+                products_to_create.append(product_instance)
 
             except Exception as e:
-                # Log the error
-                print(f"Failed to process row {index}: {e}")
+                # Pushing for errors: Log bad rows but continue processing the rest of the file.
+                print(f"Skipping row {index + 2} due to error: {e}")
                 continue
+
+        # --- 4. EXECUTE BULK CREATE QUERY ---
+        if not products_to_create:
+            # Pushing for errors: If no valid products were processed, inform the user.
+            raise serializers.ValidationError(
+                "No valid product rows found in the uploaded file."
+            )
+
+        try:
+            # Create all the prepared product objects in a single, efficient database query.
+            # `batch_size` helps manage memory for extremely large files (10,000+ rows).
+            created_products = Product.objects.bulk_create(
+                products_to_create, batch_size=500
+            )
+            return len(created_products)
+        except Exception as e:
+            # Pushing for errors: Catch potential database-level errors during the bulk insert.
+            raise serializers.ValidationError(
+                f"A database error occurred during bulk creation: {e}"
+            )
 
 
 class ProductRecommendationSerializer(serializers.ModelSerializer):
