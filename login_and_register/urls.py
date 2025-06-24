@@ -13,7 +13,7 @@ urlpatterns = [
     path("token/refresh/", TokenRefreshView.as_view(), name="refresh"),
     path("register/", UserRegisterView.as_view(), name="register"),
     # User profile endpoints
-    path("user/profile/", CustomerProfileView.as_view(), name="customer-profile"),
-    path("vendor/profile/", VendorProfileView.as_view(), name="vendor-profile"),
+    # Self-service Profile URL - This is the one your frontend will hit
+    path("profile/", UserProfileView.as_view(), name="user-profile"),
     # Include the router URLs
 ] + router.urls

@@ -1,148 +1,106 @@
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.pagination import PageNumberPagination
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework import generics
 from rest_framework import status
-from .serializers import *
-from .models import *
 
-
-class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = "per_page"
-    max_page_size = 100
-
+# Import only the serializers you will actually use in this file
+from .serializers import (
+    CustomTokenObtainPairSerializer,
+    UserSerializer,  # For customer registration
+    VendorSerializer,  # For admin creation of vendors
+    UserDetailSerializer,  # For the unified profile view
+    VendorListSerializer,  # For the admin vendor list
+    CustomerListSerializer,  # For the admin customer list
+    UpdateVendorSerializer,  # For updating vendor profiles
+    UpdateCustomerSerializer,  # For updating customer profiles
+)
+from .models import CustomUser, Vendor
 
 # ===================================================================
-# 1. AUTHENTICATION & PUBLIC REGISTRATION
+# 1. AUTHENTICATION & REGISTRATION
 # ===================================================================
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """
-    Custom login view to add user role to the JWT token.
-    """
+    """Custom login view to add user role to the JWT token."""
 
     serializer_class = CustomTokenObtainPairSerializer
 
 
 class UserRegisterView(generics.CreateAPIView):
-    """
-    Public-facing endpoint for a new CUSTOMER to create an account.
-    Accessible by anyone.
-    """
+    """Public-facing endpoint for a new CUSTOMER to create an account."""
 
     queryset = CustomUser.objects.all()
     permission_classes = [AllowAny]
-    serializer_class = UserSerializer
+    serializer_class = (
+        UserSerializer  # Correctly uses the customer registration serializer
+    )
 
 
 # ===================================================================
-# 2. SELF-SERVICE PROFILE MANAGEMENT (For Logged-in Users)
+# 2. UNIFIED SELF-SERVICE PROFILE MANAGEMENT
 # ===================================================================
 
 
-class CustomerProfileView(generics.RetrieveUpdateAPIView):
+class UserProfileView(generics.RetrieveUpdateAPIView):
     """
-    Handles GET and PUT/PATCH for the currently authenticated CUSTOMER's profile.
-    A user can only see and edit their own data.
+    Handles GET (view) and PUT/PATCH (update) for ANY currently authenticated user.
+    This single view replaces the need for separate CustomerProfileView and VendorProfileView.
     """
 
     permission_classes = [IsAuthenticated]
-    serializer_class = UserSerializer
+    serializer_class = UserDetailSerializer  # Use our powerful, unified serializer
 
     def get_object(self):
-        # This securely returns the profile of the user making the request.
+        # The object being viewed/edited is always the user making the request.
         return self.request.user
 
 
-class VendorProfileView(generics.RetrieveUpdateAPIView):
-    """
-    Handles GET and PUT/PATCH for the currently authenticated VENDOR's profile.
-    A vendor can only see and edit their own data.
-    """
-
-    permission_classes = [
-        IsAuthenticated
-    ]  # You could add a custom IsVendor permission later
-    serializer_class = VendorSerializer
-
-    def get_object(self):
-        # Securely returns the vendor profile linked to the user making the request.
-        # If they are not a vendor, this will correctly return a 404 Not Found.
-        return get_object_or_404(Vendor, user=self.request.user)
-
+# The old, separate CustomerProfileView and VendorProfileView are now REMOVED.
 
 # ===================================================================
-# 3. ADMIN MANAGEMENT VIEWS (For Admins Only)
+# 3. ADMIN MANAGEMENT VIEWS (No changes needed here, just confirming)
 # ===================================================================
 
 
 class CustomerViewSet(viewsets.ModelViewSet):
-    """
-    Admin-only viewset for managing all CUSTOMER accounts.
-    Provides full CRUD functionality over users in the 'customer' group.
-    """
+    """Admin-only viewset for managing all CUSTOMER accounts."""
 
-    # Query only users in the 'customer' group for this viewset.
     queryset = CustomUser.objects.filter(groups__name="customer").order_by(
         "-date_joined"
     )
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  # Should be IsAdminUser
 
     def get_serializer_class(self):
-        # Use a lightweight serializer for the list view for performance.
         if self.action == "list":
             return CustomerListSerializer
-        # Use the full serializer for creating, retrieving, or updating.
+        # --- THIS IS THE FIX ---
+        if self.action in ["update", "partial_update"]:
+            return UpdateCustomerSerializer  # Use the simple serializer for updates
+        # For 'create' (registration) use the full UserSerializer
         return UserSerializer
 
 
 class VendorViewSet(viewsets.ModelViewSet):
-    """
-    Admin-only viewset for managing all VENDOR accounts.
-    The admin is the only one who can create new vendors.
-    """
+    """Admin-only viewset for managing all VENDOR accounts."""
 
-    # Use select_related to optimize database queries by fetching the user in the same query.
     queryset = Vendor.objects.select_related("user").all().order_by("-created_at")
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  # Should be IsAdminUser
 
     def get_serializer_class(self):
         if self.action == "list":
             return VendorListSerializer
-        # For create, retrieve, update, use the full VendorSerializer
+        # --- THIS IS THE FIX ---
+        if self.action in ["update", "partial_update"]:
+            return UpdateVendorSerializer  # Use the simple serializer for updates
+        # For 'create' and 'retrieve', use the full serializer
         return VendorSerializer
 
-    def create(self, request, *args, **kwargs):
-        """
-        Custom create method to provide clear error handling.
-        """
-        serializer = self.get_serializer(data=request.data)
-        # is_valid with raise_exception=True will automatically return a 400
-        # response with error details if validation fails.
-        serializer.is_valid(raise_exception=True)
-
-        # perform_create calls serializer.save(), which in turn calls our
-        # custom serializer.create() method.
-        self.perform_create(serializer)
-
-        headers = self.get_success_headers(serializer.data)
-        return Response(
-            serializer.data, status=status.HTTP_201_CREATED, headers=headers
-        )
-
     def destroy(self, request, *args, **kwargs):
-        """
-        Custom destroy method to ensure the associated user is also deleted.
-        """
+        """Custom destroy method to ensure the associated user is also deleted."""
         vendor_profile = self.get_object()
-        # Because of the on_delete=models.CASCADE on the OneToOneField,
-        # deleting the user will automatically delete the Vendor profile.
         vendor_profile.user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

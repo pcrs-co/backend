@@ -12,6 +12,77 @@ import random
 import re
 
 
+# A serializer specifically for the nested Vendor profile
+class NestedVendorProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        fields = ["id", "company_name", "location", "logo"]
+
+
+# This is your main, unified serializer for viewing and UPDATING user details
+class UserDetailSerializer(serializers.ModelSerializer):
+    # This field is for READING the vendor profile.
+    vendor_profile_read = NestedVendorProfileSerializer(source="vendor", read_only=True)
+
+    # This field is for WRITING (updating) the vendor profile. It's not part of the model itself.
+    vendor_profile_write = serializers.JSONField(write_only=True, required=False)
+
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "role",  # Read-only
+            "vendor_profile_read",  # Read-only representation of vendor data
+            "vendor_profile_write",  # Write-only field for receiving vendor updates
+            "date_joined",
+        ]
+        read_only_fields = ["username", "date_joined", "role", "vendor_profile_read"]
+
+    def get_role(self, obj):
+        """Determines the user's primary role."""
+        if obj.is_superuser or obj.is_staff:
+            return "admin"
+        if hasattr(obj, "vendor"):
+            return "vendor"
+        return "customer"
+
+    def update(self, instance, validated_data):
+        """Handle updates for both CustomUser and the nested Vendor profile."""
+        # Pop the vendor data before calling the parent update method
+        vendor_data = validated_data.pop("vendor_profile_write", None)
+
+        # Update the CustomUser fields (first_name, last_name, etc.)
+        instance = super().update(instance, validated_data)
+
+        # If vendor data was provided and the user is a vendor, update the vendor profile
+        if vendor_data and hasattr(instance, "vendor"):
+            vendor_profile = instance.vendor
+            # Assuming vendor_data is a dict like {'company_name': 'New Name'}
+            for attr, value in vendor_data.items():
+                setattr(vendor_profile, attr, value)
+            vendor_profile.save()
+
+        return instance
+
+    def to_representation(self, instance):
+        """
+        Custom representation to rename `vendor_profile_read` to `vendor_profile`
+        for a cleaner frontend experience.
+        """
+        representation = super().to_representation(instance)
+        # The write-only field won't be in the output, so we don't need to pop it.
+        representation["vendor_profile"] = representation.pop(
+            "vendor_profile_read", None
+        )
+        return representation
+
+
 # Create a small, reusable serializer for the user data
 class UserNestedSerializer(serializers.ModelSerializer):
     class Meta:
@@ -116,6 +187,27 @@ class CustomerListSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ["id", "username", "first_name", "last_name", "email", "phone_number"]
+
+
+# New serializer specifically for an admin updating a customer's user profile.
+class UpdateCustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        # List only the fields an admin should be able to change on the user model.
+        # We exclude sensitive fields like password.
+        fields = [
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "phone_number",
+            "region",
+            "district",
+        ]
+        # --- THIS IS THE FIX ---
+        # Mark the username as read-only. An admin can see it, but not change it.
+        # This prevents accidental changes and is a common source of validation errors.
+        read_only_fields = ['username']
 
 
 class VendorListSerializer(serializers.ModelSerializer):
@@ -249,6 +341,14 @@ class VendorSerializer(serializers.ModelSerializer):
             )
         except Exception as e:
             print(f"Failed to send email: {e}")
+
+
+# New serializer specifically for updating a vendor's own profile.
+class UpdateVendorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        # List only the fields you want to be editable by an admin.
+        fields = ["company_name", "location", "logo", "verified"]
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
