@@ -60,7 +60,9 @@ class ApplicationSystemRequirementViewSet(viewsets.ModelViewSet):
 
 class UserPreferenceView(APIView):
     def post(self, request):
-        serializer = UserPreferenceSerializer(data=request.data)
+        serializer = UserPreferenceSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         preference = serializer.save()
 
@@ -77,16 +79,19 @@ class GenerateRecommendationView(APIView):
 
         recommendation = generate_recommendation(user=user, session_id=session_id)
         if not recommendation:
-            return Response({"error": "No preferences found"}, status=400)
+            return Response(
+                {
+                    "error": "No preferences found or could not generate a recommendation."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
+        # --- THIS IS THE KEY CHANGE ---
+        # Instead of returning a manual dictionary, use the serializer
+        serializer = RecommendationSpecificationSerializer(recommendation)
         return Response(
-            {
-                "min_cpu_score": recommendation.min_cpu_score,
-                "min_gpu_score": recommendation.min_gpu_score,
-                "min_ram": recommendation.min_ram,
-                "min_storage": recommendation.min_storage,
-            }
-        )
+            serializer.data, status=status.HTTP_200_OK
+        )  # Use 200 OK since we are returning data
 
 
 class ProductRecommendationView(APIView):

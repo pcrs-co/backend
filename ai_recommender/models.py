@@ -118,7 +118,10 @@ class RecommendationSpecification(models.Model):
         UserPreference, on_delete=models.SET_NULL, null=True, blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
-
+    min_cpu_name = models.CharField(max_length=255, null=True, blank=True)
+    min_gpu_name = models.CharField(max_length=255, null=True, blank=True)
+    recommended_cpu_name = models.CharField(max_length=255, null=True, blank=True)
+    recommended_gpu_name = models.CharField(max_length=255, null=True, blank=True)
     recommended_cpu_score = models.FloatField(null=True, blank=True)
     recommended_gpu_score = models.FloatField(null=True, blank=True)
     recommended_ram = models.IntegerField(null=True, blank=True)
