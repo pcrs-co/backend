@@ -1,9 +1,10 @@
+from datetime import timedelta
 from .logic.ai_discovery import (
     discover_applications_for_activity,
     discover_and_save_requirements,
 )
 from .logic.enrich_app_data import enrich_application  # We will modify this function
-from .models import CPUBenchmark, GPUBenchmark
+from .models import Activity, Application, CPUBenchmark, GPUBenchmark
 from django.db import transaction
 from django.utils import timezone
 from celery import shared_task
@@ -51,6 +52,59 @@ def process_benchmark_file(file_content_base64, file_name, item_type):
         error_message = f"An error occurred during processing: {str(e)}"
         print(error_message)
         return error_message
+
+
+@shared_task
+def enrich_new_activity_task(activity_id):
+    """
+    A targeted background task to discover and enrich applications for a *single*, newly created activity.
+    """
+    try:
+        activity = Activity.objects.get(id=activity_id)
+        print(f"Starting enrichment task for newly created activity: '{activity.name}'")
+    except Activity.DoesNotExist:
+        print(f"Activity with ID {activity_id} not found. Aborting enrichment task.")
+        return f"Task failed: Activity ID {activity_id} not found."
+
+    # Step 1: Discover a list of applications for the activity using AI
+    print(f"Discovering applications for '{activity.name}'...")
+    discovered_app_names = discover_applications_for_activity(activity)
+
+    if not discovered_app_names:
+        print(f"No applications discovered for '{activity.name}'. Task finished.")
+        return f"No applications found for {activity.name}."
+
+    print(
+        f"Discovered {len(discovered_app_names)} potential apps: {', '.join(discovered_app_names)}"
+    )
+
+    # Step 2: For each discovered application, find its system requirements
+    enriched_count = 0
+    for app_name in discovered_app_names:
+        # We only enrich if the app is truly new or lacks requirements.
+        # This prevents redundant AI calls if an app like 'Blender' is found for multiple activities.
+        app = Application.objects.filter(name__iexact=app_name).first()
+        if app and app.requirements.exists():
+            print(
+                f"Skipping enrichment for '{app_name}' as it already has requirements in the DB."
+            )
+            # Optional: You could still associate this existing app with the new activity here if needed.
+            # app.activity.add(activity)
+            continue
+
+        print(f"Enriching '{app_name}' with system requirements...")
+        try:
+            # This function calls the AI and saves the requirements to the DB
+            discover_and_save_requirements(app_name=app_name, activity=activity)
+            enriched_count += 1
+            print(f"Successfully enriched '{app_name}'.")
+        except Exception as e:
+            print(f"ERROR: Failed to enrich '{app_name}'. Reason: {e}")
+            # Continue to the next app even if one fails.
+
+    final_message = f"Enrichment task for '{activity.name}' complete. Enriched {enriched_count} new applications."
+    print(final_message)
+    return final_message
 
 
 @shared_task

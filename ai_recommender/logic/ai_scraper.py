@@ -6,9 +6,8 @@ import google.generativeai as genai
 openai.api_key = os.getenv("OPENAI_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+
 # --- Helper functions for each AI ---
-
-
 def ask_openai(prompt: str) -> str:
     try:
         system = "You are a helpful assistant that gives detailed application system requirements in a specific, structured JSON format."
@@ -43,8 +42,6 @@ def ask_gemini(prompt: str) -> str:
 
 
 # --- Main function to call all AIs ---
-
-
 def query_all_ais(prompt: str) -> list[str]:
     """
     Queries all configured AI models with the same prompt in parallel.

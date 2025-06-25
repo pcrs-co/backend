@@ -19,6 +19,7 @@ python3 -m venv venv
 Use the appropriate command for your operating system:
 
 - **Linux/macOS:**
+
   ```bash
   source env/bin/activate
   ```
@@ -47,24 +48,27 @@ pip install -r requirements.txt
 If you get an error related to MySQL during installation, install the necessary development libraries:
 
 - **Ubuntu/Debian:**
+
   ```bash
   sudo apt update
   sudo apt install libmysqlclient-dev
   ```
 
 - **Fedora/RHEL:**
+
   ```bash
   sudo dnf install mariadb-devel
   ```
 
 - **Arch/Manjaro:**
+
   ```bash
   sudo pacman -S mariadb
   ```
 
 - **Windows:**
   Download and install the [MySQL Connector/C](https://dev.mysql.com/downloads/connector/c/)
-  
+
 Then try installing dependencies again:
 
 ```bash
@@ -108,3 +112,19 @@ Your backend setup is now complete.
 
 Refer to the [contributing guide](../CONTRIBUTING.md) for next steps or development instructions.
 
+## Step 6: Running the backend
+
+```bash
+    Start your Django server as usual:
+    python manage.py runserver
+
+    Start your Redis server (if not already running):
+    redis-server or docker run -d -p 6379:6379 redis
+
+    Start the Celery worker: Open a new terminal in your project directory and run:
+
+    celery -A backend worker -l info
+    You should see the worker connect and say it's ready to accept tasks.
+```
+
+---

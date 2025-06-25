@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group
 from django.core.mail import send_mail
 from rest_framework import serializers
 from io import BytesIO
+from .tasks import enrich_new_activity_task
 from .models import *
 import pandas as pd
 import string
@@ -11,21 +12,15 @@ import re
 
 
 class CPUBenchmarkSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source="cpu")  # Alias
-    benchmark_score = serializers.IntegerField(source="score")  # Alias
-
     class Meta:
         model = CPUBenchmark
-        fields = ["id", "name", "benchmark_score", "cpu_mark", "price"]
+        fields = "__all__"
 
 
 class GPUBenchmarkSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source="gpu")  # Alias
-    benchmark_score = serializers.IntegerField(source="score")
-
     class Meta:
         model = GPUBenchmark
-        fields = ["id", "name", "benchmark_score", "gpu_mark", "price"]
+        fields = "__all__"
 
 
 class ActivitySerializer(serializers.ModelSerializer):
@@ -58,33 +53,42 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
         fields = ["activities", "applications", "session_id", "budget"]
 
     def create(self, validated_data):
-        user = self.context['request'].user
+        user = self.context["request"].user
         activity_names = validated_data.pop("activities", [])
         app_names = validated_data.pop("applications", [])
 
         # --- REFINED CREATION LOGIC ---
-        
+
         # Step 1: Create the base UserPreference object
         preference_data = {**validated_data}
         if user.is_authenticated:
-            preference_data['user'] = user
-            preference_data.pop('session_id', None)
+            preference_data["user"] = user
+            preference_data.pop("session_id", None)
         else:
-            preference_data['session_id'] = validated_data.get('session_id', uuid.uuid4())
-            
+            preference_data["session_id"] = validated_data.get(
+                "session_id", uuid.uuid4()
+            )
+
         preference = UserPreference.objects.create(**preference_data)
 
         # Step 2: Handle Activities
+        # --- THIS IS THE KEY CHANGE ---
+        # Handle Activities and trigger background enrichment
         created_activities = []
         for name in activity_names:
-            # Use get_or_create for efficiency and safety
             activity, created = Activity.objects.get_or_create(
-                name__iexact=name.strip(), 
-                defaults={"name": name.strip()}
+                name__iexact=name.strip(), defaults={"name": name.strip()}
             )
             created_activities.append(activity)
-        
-        # Add all activities to the preference object at once
+
+            # If the activity is brand new, start the enrichment process!
+            if created:
+                print(
+                    f"New activity '{activity.name}' created. Triggering targeted enrichment task."
+                )
+                # We use .delay() to call our new task asynchronously
+                enrich_new_activity_task.delay(activity.id)
+
         if created_activities:
             preference.activities.add(*created_activities)
 
@@ -98,16 +102,18 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
                 defaults={
                     "name": app_name.strip(),
                     # This is a much safer fallback. It creates a default activity if none exist.
-                    "activity": first_activity or Activity.objects.get_or_create(name="General Use")[0],
-                    "intensity_level": "medium"
-                }
+                    "activity": first_activity
+                    or Activity.objects.get_or_create(name="General Use")[0],
+                    "intensity_level": "medium",
+                },
             )
             created_applications.append(app)
-        
+
         if created_applications:
             preference.applications.add(*created_applications)
 
         return preference
+
 
 class RecommendationSpecificationSerializer(serializers.ModelSerializer):
     # We define custom fields to structure the output JSON
