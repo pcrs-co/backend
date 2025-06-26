@@ -91,24 +91,30 @@ class ApplicationSystemRequirement(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if self.cpu and not self.cpu_score:
-            cpu_bench = (
-                CPUBenchmark.objects.filter(cpu__iexact=self.cpu)
-                .order_by("-score")
-                .first()
-            )
-            if cpu_bench:
-                self.cpu_score = cpu_bench.score
+        """
+        Overrides the default save method to intelligently find the best benchmark
+        for the given CPU and GPU names.
+        """
+        # --- CPU ---
 
-        if self.gpu and self.gpu_score is None:
-            # -- FIXED: Removed non-existent field `gpu_mark` from query --
-            gpu_bench = (
-                GPUBenchmark.objects.filter(gpu__iexact=self.gpu)
-                .order_by("-score")
-                .first()
-            )
-            if gpu_bench:
-                self.gpu_score = gpu_bench.score
+        from .logic.utils import find_best_benchmark
+
+        if self.cpu and self.cpu_score == 0:
+            # Use our new advanced search function
+            best_cpu = find_best_benchmark(self.cpu, "cpu")
+            if best_cpu:
+                # If a best match is found, we use ITS data.
+                # This corrects the AI's vague name to a precise one from our DB.
+                self.cpu = best_cpu.cpu
+                self.cpu_score = best_cpu.score
+
+        # --- GPU ---
+        if self.gpu and self.gpu_score == 0:
+            # Use our new advanced search function
+            best_gpu = find_best_benchmark(self.gpu, "gpu")
+            if best_gpu:
+                self.gpu = best_gpu.gpu
+                self.gpu_score = best_gpu.score
 
         super().save(*args, **kwargs)
 
