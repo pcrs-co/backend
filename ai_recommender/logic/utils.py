@@ -227,3 +227,46 @@ def clean_and_convert_to_int(value) -> int:
         return int(value)
 
     return 0
+
+
+def find_best_benchmark(raw_name: str, component_type: str):
+    """
+    Takes a raw string from an AI (e.g., "Intel i7-9700K or AMD Ryzen 7 2700X")
+    and finds the best matching benchmark from the database.
+
+    Args:
+        raw_name: The string from the AI.
+        component_type: 'cpu' or 'gpu'.
+
+    Returns:
+        The best matching benchmark model instance, or None if no match is found.
+    """
+    if not raw_name or raw_name.lower() in ["none", "not specified", "n/a"]:
+        return None
+
+    # 1. Split the raw string into a list of potential candidates
+    # We split by "or", "/", and "," and then clean up each part.
+    candidates = re.split(r"\s+or\s+|\s*/\s*|,", raw_name, flags=re.IGNORECASE)
+    cleaned_candidates = [c.strip() for c in candidates if c.strip()]
+
+    if not cleaned_candidates:
+        return None
+
+    # 2. Build a dynamic query to find all possible matches
+    ModelClass = CPUBenchmark if component_type == "cpu" else GPUBenchmark
+    query = Q()
+    for candidate in cleaned_candidates:
+        # The query will be: Q(cpu__icontains='Intel Core i7-9700K') | Q(cpu__icontains='AMD Ryzen 7 2700X')
+        query |= Q(**{f"{component_type}__icontains": candidate})
+
+    # 3. Execute the query to get all potential benchmarks
+    found_benchmarks = ModelClass.objects.filter(query)
+
+    if not found_benchmarks.exists():
+        return None
+
+    # 4. Evaluate and select the best one (based on the highest score)
+    # You could change `score` to `value_score` to prioritize economy
+    best_match = max(found_benchmarks, key=lambda bench: bench.score)
+
+    return best_match
