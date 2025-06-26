@@ -1,60 +1,103 @@
+# ai_recommender/logic/recommendation_engine.py
+
 from ..models import (
     UserPreference,
-    Application,
     ApplicationSystemRequirement,
     RecommendationSpecification,
 )
-from django.db.models import Max
-from .utils import compare_requirements
+from django.db.models import F, Max
+
+
+def get_heaviest_requirement(requirements_qs):
+    """
+    Finds the single most demanding requirement set from a queryset.
+    The "heaviest" is determined by the highest combined CPU and GPU score.
+    """
+    if not requirements_qs.exists():
+        return None
+
+    # Use annotation to find the requirement with the highest combined score
+    heaviest_req = (
+        requirements_qs.annotate(total_score=F("cpu_score") + F("gpu_score"))
+        .order_by("-total_score")
+        .first()
+    )
+
+    return heaviest_req
 
 
 def generate_recommendation(user=None, session_id=None):
-    # Get preference
-    pref = None
-    if user:
-        pref = UserPreference.objects.filter(user=user).last()
+    """
+    Generates a complete RecommendationSpecification based on a user's preferences.
+    """
+    pref_filter = {}
+    if user and user.is_authenticated:
+        pref_filter["user"] = user
     elif session_id:
-        pref = UserPreference.objects.filter(session_id=session_id).last()
+        pref_filter["session_id"] = session_id
+    else:
+        return None  # Cannot proceed without a user or session
+
+    pref = UserPreference.objects.filter(**pref_filter).order_by("-created_at").first()
 
     if not pref:
-        return None  # No preferences found
-
-    # Get related applications
-    apps = pref.applications.all()
-
-    if not apps.exists():  # Check if the queryset has any applications
-        print("No applications found for this preference.")
+        print(f"No preferences found for user/session.")
         return None
 
-    # Gather all requirements
-    min_requirements = ApplicationSystemRequirement.objects.filter(
+    apps = pref.applications.all()
+    if not apps.exists():
+        print(f"No applications found for preference {pref.id}.")
+        return None
+
+    min_reqs_qs = ApplicationSystemRequirement.objects.filter(
         application__in=apps, type="minimum"
     )
-    rec_requirements = ApplicationSystemRequirement.objects.filter(
+    rec_reqs_qs = ApplicationSystemRequirement.objects.filter(
         application__in=apps, type="recommended"
     )
 
-    min_specs = compare_requirements(min_requirements)
-    rec_specs = compare_requirements(rec_requirements)
+    # Find the single most demanding requirement for both minimum and recommended
+    heaviest_min = get_heaviest_requirement(min_reqs_qs)
+    heaviest_rec = get_heaviest_requirement(rec_reqs_qs)
 
+    defaults = {}
+    if heaviest_min:
+        defaults.update(
+            {
+                "min_cpu_name": heaviest_min.cpu,
+                "min_gpu_name": heaviest_min.gpu,
+                "min_cpu_score": heaviest_min.cpu_score,
+                "min_gpu_score": heaviest_min.gpu_score,
+                "min_ram": heaviest_min.ram,
+                "min_storage_size": heaviest_min.storage_size,
+                "min_storage_type": heaviest_min.storage_type,
+            }
+        )
+
+    if heaviest_rec:
+        defaults.update(
+            {
+                "recommended_cpu_name": heaviest_rec.cpu,
+                "recommended_gpu_name": heaviest_rec.gpu,
+                "recommended_cpu_score": heaviest_rec.cpu_score,
+                "recommended_gpu_score": heaviest_rec.gpu_score,
+                "recommended_ram": heaviest_rec.ram,
+                "recommended_storage_size": heaviest_rec.storage_size,
+                "recommended_storage_type": heaviest_rec.storage_type,
+            }
+        )
+
+    if not defaults:
+        print(f"Could not determine any specs for preference {pref.id}.")
+        return None
+
+    # Create the final recommendation object
     rec, created = RecommendationSpecification.objects.update_or_create(
-        user=user,
-        session_id=str(session_id) if not user else None,
-        defaults={
-            "min_cpu_score": min_specs["cpu_score"],
-            "min_gpu_score": min_specs["gpu_score"],
-            "min_ram": min_specs["ram"],
-            "min_storage": min_specs["storage"],
-            "min_cpu_name": min_specs["cpu_name"],  # New
-            "min_gpu_name": min_specs["gpu_name"],  # New
-            "recommended_cpu_score": rec_specs["cpu_score"],
-            "recommended_gpu_score": rec_specs["gpu_score"],
-            "recommended_ram": rec_specs["ram"],
-            "recommended_storage": rec_specs["storage"],
-            "recommended_cpu_name": rec_specs["cpu_name"],  # New
-            "recommended_gpu_name": rec_specs["gpu_name"],  # New
-            "source_preference": pref,  # Good practice to link it
-        },
+        user=pref.user,
+        session_id=str(pref.session_id) if not pref.user else None,
+        defaults={"source_preference": pref, **defaults},
     )
-
+    print(
+        f"{'Created' if created else 'Updated'} recommendation {rec.id} for preference {pref.id}."
+    )
     return rec

@@ -1,21 +1,7 @@
-from ..models import CPUBenchmark, GPUBenchmark
+from ..models import CPUBenchmark, GPUBenchmark, DiskBenchmark
 from decimal import Decimal, InvalidOperation
 import pandas as pd
 import re
-
-
-def get_cpu_score(cpu_name):
-    bench = (
-        CPUBenchmark.objects.filter(cpu__icontains=cpu_name).order_by("-score").first()
-    )
-    return bench.score if bench else None
-
-
-def get_gpu_score(gpu_name):
-    bench = (
-        GPUBenchmark.objects.filter(cpu__icontains=gpu_name).order_by("-score").first()
-    )
-    return bench.score if bench else None
 
 
 def compare_requirements(requirements):
@@ -54,7 +40,7 @@ def compare_requirements(requirements):
     heaviest["cpu_name"] = top_requirement.cpu
     heaviest["gpu_name"] = top_requirement.gpu
     heaviest["ram"] = top_requirement.ram
-    heaviest["storage"] = top_requirement.storage
+    heaviest["storage_size"] = top_requirement.storage_size
     heaviest["cpu_score"] = top_requirement.cpu_score
     heaviest["gpu_score"] = top_requirement.gpu_score
     heaviest["notes"] = f"These specs are based on the requirements for: {all_apps}."
@@ -91,68 +77,153 @@ def compare_requirements(requirements):
 
 def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
     """
-    Processes a benchmark DataFrame and inserts/updates CPU or GPU benchmark records.
+    Processes a benchmark DataFrame and inserts/updates benchmark records.
+    This version is robust against missing data and respects NOT NULL constraints.
     """
     item_type = item_type.lower()
+    df.columns = (
+        df.columns.str.strip().str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
+    )
 
+    # ++ FIX: Initialize counters at the top ++
+    created_count, updated_count = 0, 0
+    skipped_count = 0
+
+    col_map = {}
     if item_type == "cpu":
         ModelClass = CPUBenchmark
-        name_field = "cpu"
-        mark_field = "cpu_mark"
-        mark_column = "cpu mark"
+        col_map = {
+            "cpuname": "cpu",
+            "cpumark": "score",
+            "rank": "rank",
+            "cpuvalue": "value_score",
+            "price": "price",
+        }
+        name_col_key, score_col_key = "cpuname", "cpumark"
     elif item_type == "gpu":
         ModelClass = GPUBenchmark
-        name_field = "gpu"
-        mark_field = "gpu_mark"
-        mark_column = "gpu mark"
-    else:
-        raise ValueError("Invalid item_type. Must be 'cpu' or 'gpu'.")
+        col_map = {
+            "videocardname": "gpu",
+            "g3dmark": "score",
+            "rank": "rank",
+            "videocardvalue": "value_score",
+            "price": "price",
+        }
+        name_col_key, score_col_key = "videocardname", "g3dmark"
+    elif item_type == "disk":
+        ModelClass = DiskBenchmark
+        col_map = {
+            "drivename": "drive_name",
+            "diskrating": "score",  # Matches your "diskratin" column
+            "size": "size_tb",
+            "rank": "rank",
+            "drivevalue": "value_score",  # Matches your "drivevalue" column
+            "price": "price",
+        }
+        name_col_key, score_col_key = "drivename", "diskrating"
 
-    df.columns = df.columns.str.strip().str.lower()
-    required_cols = {"name", "score", mark_column, "price"}
+    if not col_map:
+        raise ValueError("Invalid item_type. Must be 'cpu', 'gpu', or 'disk'.")
+
+    required_cols = {name_col_key, score_col_key}
     if not required_cols.issubset(df.columns):
         missing = required_cols - set(df.columns)
         raise ValueError(
-            f"Missing required columns: {missing}. Found: {list(df.columns)}"
+            f"Missing required columns for type '{item_type}': {missing}. Found: {list(df.columns)}"
         )
 
-    created, updated = 0, 0
-    for _, row in df.iterrows():
-        if pd.isna(row["name"]) or pd.isna(row["score"]):
+    for index, row in df.iterrows():
+        component_name = row.get(name_col_key)
+        score_val = row.get(score_col_key)
+
+        # ++ ROBUSTNESS: Skip rows with no name or no score ++
+        if pd.isna(component_name) or pd.isna(score_val):
+            print(
+                f"  - WARNING: Skipping row {index + 2} due to missing name or score."
+            )
+            skipped_count += 1
             continue
 
-        component_name = str(row["name"]).strip()
+        component_name = str(component_name).strip()
+        defaults = {}
 
-        # Clean and parse score
-        try:
-            score_value = int(re.sub(r"[^\d]", "", str(row["score"])))
-        except (ValueError, TypeError):
-            print(f"Warning: Invalid score format for {component_name}. Skipping row.")
-            continue
+        # --- Process all other columns ---
+        for standardized_name, model_field in col_map.items():
+            value = row.get(standardized_name)
+            if pd.isna(value):
+                # We already handled required fields, so others can be None
+                defaults[model_field] = None
+                continue
 
-        # Clean and parse price
-        price = None
-        if pd.notna(row["price"]):
             try:
-                cleaned_price_str = re.sub(r"[^\d.]", "", str(row["price"]))
-                if cleaned_price_str:
-                    price = Decimal(cleaned_price_str)
-            except InvalidOperation:
-                print(f"Warning: Invalid price format for {component_name}")
+                if model_field in ["score", "rank"]:
+                    # Clean and convert to integer
+                    cleaned_val = re.sub(r"[^\d]", "", str(value))
+                    if cleaned_val:
+                        defaults[model_field] = int(cleaned_val)
+                    else:
+                        # If score is empty after cleaning, it's invalid.
+                        if model_field == "score":
+                            raise ValueError("Score became empty after cleaning.")
+                        defaults[model_field] = None
+                elif model_field in ["value_score", "size_tb"]:
+                    cleaned_val = re.sub(r"[^\d.]", "", str(value))
+                    defaults[model_field] = float(cleaned_val) if cleaned_val else None
+                elif model_field == "price":
+                    price_str = re.sub(r"[^\d.]", "", str(value))
+                    defaults[model_field] = Decimal(price_str) if price_str else None
 
-        lookup = {name_field: component_name}
-        defaults = {
-            "score": score_value,
-            mark_field: str(row[mark_column]).strip(),
-            "price": price,
-        }
+            except (ValueError, TypeError, InvalidOperation) as e:
+                # If a non-essential field fails to parse, we can live with it being null
+                print(
+                    f"  - WARNING: Could not parse field '{model_field}' for '{component_name}' on row {index + 2}. Value: '{value}'. Setting to NULL. Error: {e}"
+                )
+                defaults[model_field] = None
 
-        _, was_created = ModelClass.objects.update_or_create(
+        # If a score couldn't be parsed, `defaults` won't have it. We must skip.
+        if "score" not in defaults or defaults["score"] is None:
+            print(
+                f"  - WARNING: Skipping row {index + 2} for '{component_name}' because score could not be parsed."
+            )
+            skipped_count += 1
+            continue
+
+        # Use update_or_create to insert or update the record
+        lookup = {col_map[name_col_key]: component_name}
+        obj, was_created = ModelClass.objects.update_or_create(
             **lookup, defaults=defaults
         )
-        if was_created:
-            created += 1
-        else:
-            updated += 1
 
-    return {"created": created, "updated": updated}
+        if was_created:
+            created_count += 1
+        else:
+            updated_count += 1
+
+    # Add skipped count to the results
+    return {
+        "created": created_count,
+        "updated": updated_count,
+        "skipped": skipped_count,
+    }
+
+
+def clean_and_convert_to_int(value) -> int:
+    """
+    Cleans a string to extract an integer, handling common cases like '8 GB'.
+    Returns 0 if conversion is not possible.
+    """
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        # Find the first sequence of digits in the string
+        match = re.search(r"\d+", value)
+        if match:
+            try:
+                return int(match.group(0))
+            except (ValueError, TypeError):
+                return 0
+    # Handle float or other numeric types if necessary
+    if isinstance(value, float):
+        return int(value)
+
+    return 0

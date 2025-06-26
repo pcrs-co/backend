@@ -116,26 +116,25 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 
 
 class RecommendationSpecificationSerializer(serializers.ModelSerializer):
-    # We define custom fields to structure the output JSON
+    """
+    Presents the final recommendation in a clean, nested JSON format for the frontend.
+    """
+
     minimum_specs = serializers.SerializerMethodField()
     recommended_specs = serializers.SerializerMethodField()
-    note = serializers.SerializerMethodField()
 
     class Meta:
         model = RecommendationSpecification
-        fields = ["note", "minimum_specs", "recommended_specs"]
-
-    def get_note(self, obj):
-        # You can make this more dynamic later if needed
-        return "A computer with the recommended specifications will fit your needs perfectly. The minimum specs are for basic usage."
+        fields = ["minimum_specs", "recommended_specs"]
 
     def get_minimum_specs(self, obj):
         return {
             "type": "minimum",
             "cpu": obj.min_cpu_name,
             "gpu": obj.min_gpu_name,
-            "ram": obj.min_ram,
-            "storage": obj.min_storage,
+            "ram_gb": obj.min_ram,
+            "storage_gb": obj.min_storage_size,  # ++ UPDATED field name
+            "storage_type": obj.min_storage_type,  # ++ ADDED field
         }
 
     def get_recommended_specs(self, obj):
@@ -143,6 +142,7 @@ class RecommendationSpecificationSerializer(serializers.ModelSerializer):
             "type": "recommended",
             "cpu": obj.recommended_cpu_name,
             "gpu": obj.recommended_gpu_name,
-            "ram": obj.recommended_ram,
-            "storage": obj.recommended_storage,
+            "ram_gb": obj.recommended_ram,
+            "storage_gb": obj.recommended_storage_size,  # ++ UPDATED field name
+            "storage_type": obj.recommended_storage_type,  # ++ ADDED field
         }

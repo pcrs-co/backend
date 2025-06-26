@@ -3,7 +3,6 @@ from .logic.ai_discovery import (
     discover_applications_for_activity,
     discover_and_save_requirements,
 )
-from .logic.enrich_app_data import enrich_application  # We will modify this function
 from .models import Activity, Application, CPUBenchmark, GPUBenchmark
 from django.db import transaction
 from django.utils import timezone

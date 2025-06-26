@@ -222,12 +222,12 @@ CELERY_BEAT_SCHEDULE = {
     "discover-new-apps-daily": {
         "task": "ai_recommender.tasks.enrich_all_activities_task",
         # Runs every day at 2:00 AM
-        "schedule": crontab(hour=2, minute=0),
+        "schedule": crontab(hour=1, minute=0),
     },
     # Task 2: Update the requirements for old applications
     "update-stale-requirements-weekly": {
         "task": "ai_recommender.tasks.update_stale_system_requirements_task",
         # Runs every Sunday at 4:00 AM
-        "schedule": crontab(hour=4, minute=0, day_of_week="sun"),
+        "schedule": crontab(hour=3, minute=0),
     },
 }

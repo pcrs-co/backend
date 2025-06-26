@@ -27,29 +27,37 @@ class Application(models.Model):
 
 
 class CPUBenchmark(models.Model):
-    cpu = models.CharField(max_length=255)
-    cpu_mark = models.CharField(
-        max_length=255, null=True, blank=True
-    )  # e.g., "Intel Core i7-10700K"
+    cpu = models.CharField(max_length=255, unique=True)
     score = models.IntegerField()
-    # Add null=True and blank=True here
-    price = models.DecimalField(decimal_places=2, max_digits=65, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    value_score = models.FloatField(null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
-        return self.cpu
+        return f"{self.cpu} (Score: {self.score})"
 
 
 class GPUBenchmark(models.Model):
-    gpu = models.CharField(max_length=255)
-    gpu_mark = models.CharField(
-        max_length=255, null=True, blank=True
-    )  # e.g., "NVIDIA GeForce RTX 3080"
+    gpu = models.CharField(max_length=255, unique=True)
     score = models.IntegerField()
-    # Add null=True and blank=True here
-    price = models.DecimalField(decimal_places=2, max_digits=65, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    value_score = models.FloatField(null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
-        return self.gpu
+        return f"{self.gpu} (Score: {self.score})"
+
+
+class DiskBenchmark(models.Model):
+    drive_name = models.CharField(max_length=255, unique=True)
+    size_tb = models.FloatField(null=True, blank=True)
+    score = models.IntegerField()
+    rank = models.IntegerField(null=True, blank=True)
+    value_score = models.FloatField(null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.drive_name} (Score: {self.score})"
 
 
 class ApplicationSystemRequirement(models.Model):
@@ -65,7 +73,19 @@ class ApplicationSystemRequirement(models.Model):
     cpu_score = models.IntegerField()
     gpu_score = models.IntegerField()
     ram = models.IntegerField(help_text="RAM in GB")
-    storage = models.IntegerField(help_text="Storage in GB")
+
+    # -- MODIFIED STORAGE --
+    storage_size = models.IntegerField(
+        help_text="Storage in GB"
+    )  # Renamed from 'storage'
+    storage_type = models.CharField(
+        max_length=10,
+        choices=[("SSD", "SSD"), ("HDD", "HDD"), ("Any", "Any")],
+        default="Any",
+    )  # ++ ADDED ++
+    storage_score = models.IntegerField(
+        null=True, blank=True, help_text="Target score from DiskBenchmark"
+    )  # ++ ADDED ++
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
@@ -73,20 +93,17 @@ class ApplicationSystemRequirement(models.Model):
     def save(self, *args, **kwargs):
         if self.cpu and not self.cpu_score:
             cpu_bench = (
-                CPUBenchmark.objects.filter(
-                    Q(cpu__icontains=self.cpu) | Q(cpu_mark__icontains=self.cpu)
-                )
+                CPUBenchmark.objects.filter(cpu__iexact=self.cpu)
                 .order_by("-score")
                 .first()
             )
             if cpu_bench:
                 self.cpu_score = cpu_bench.score
 
-        if self.gpu and not self.gpu_score:
+        if self.gpu and self.gpu_score is None:
+            # -- FIXED: Removed non-existent field `gpu_mark` from query --
             gpu_bench = (
-                GPUBenchmark.objects.filter(
-                    Q(gpu__icontains=self.gpu) | Q(gpu_mark__icontains=self.gpu)
-                )
+                GPUBenchmark.objects.filter(gpu__iexact=self.gpu)
                 .order_by("-score")
                 .first()
             )
@@ -94,6 +111,9 @@ class ApplicationSystemRequirement(models.Model):
                 self.gpu_score = gpu_bench.score
 
         super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.application.name} ({self.type})"
 
 
 class UserPreference(models.Model):
@@ -124,21 +144,30 @@ class RecommendationSpecification(models.Model):
         UserPreference, on_delete=models.SET_NULL, null=True, blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    min_cpu_name = models.CharField(max_length=255, null=True, blank=True)
-    min_gpu_name = models.CharField(max_length=255, null=True, blank=True)
+
+    # -- RECOMMENDED (standardized names) --
     recommended_cpu_name = models.CharField(max_length=255, null=True, blank=True)
     recommended_gpu_name = models.CharField(max_length=255, null=True, blank=True)
-    recommended_cpu_score = models.FloatField(null=True, blank=True)
-    recommended_gpu_score = models.FloatField(null=True, blank=True)
+    recommended_cpu_score = models.IntegerField(null=True, blank=True)
+    recommended_gpu_score = models.IntegerField(null=True, blank=True)
     recommended_ram = models.IntegerField(null=True, blank=True)
-    recommended_storage = models.IntegerField(null=True, blank=True)
-    min_cpu_score = models.FloatField()
-    min_gpu_score = models.FloatField()
-    min_ram = models.IntegerField()
-    min_storage = models.IntegerField()
+    recommended_storage_size = models.IntegerField(null=True, blank=True)  # ++ RENAMED
+    recommended_storage_type = models.CharField(
+        max_length=10, default="Any"
+    )  # ++ ADDED
+
+    # -- MINIMUM (standardized names) --
+    min_cpu_name = models.CharField(max_length=255, null=True, blank=True)
+    min_gpu_name = models.CharField(max_length=255, null=True, blank=True)
+    min_cpu_score = models.IntegerField(null=True, blank=True)
+    min_gpu_score = models.IntegerField(null=True, blank=True)
+    min_ram = models.IntegerField(null=True, blank=True)
+    min_storage_size = models.IntegerField(null=True, blank=True)  # ++ RENAMED
+    min_storage_type = models.CharField(max_length=10, default="Any")  # ++ ADDED
 
     def __str__(self):
-        return f"Recommendation for {self.user or self.session_id} at {self.created_at}"
+        user_or_session = self.user.email if self.user else f"Session {self.session_id}"
+        return f"Recommendation for {user_or_session} at {self.created_at.strftime('%Y-%m-%d %H:%M')}"
 
 
 class SystemRequirementExtraction(models.Model):

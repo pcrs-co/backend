@@ -3,7 +3,6 @@ from .logic.recommendation_engine import generate_recommendation
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import ValidationError
-from .logic.enrich_app_data import enrich_application
 from rest_framework import status, viewsets, generics
 from .mixins import AsynchronousBenchmarkUploadMixin
 from vendor.serializers import ProductSerializer
