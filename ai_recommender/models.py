@@ -1,6 +1,8 @@
+import re
 from login_and_register.models import *
 from django.db.models import Q
 from django.db import models
+import difflib
 import uuid
 
 
@@ -60,6 +62,60 @@ class DiskBenchmark(models.Model):
         return f"{self.drive_name} (Score: {self.score})"
 
 
+# +++ NEW HELPER FUNCTION FOR SMART MATCHING +++
+def find_best_benchmark_match(target_name: str, benchmark_model):
+    """
+    Finds the best benchmark record by first finding the highest string similarity,
+    and then using the performance score as a tie-breaker.
+
+    Args:
+        target_name (str): The name from the AI (e.g., "Intel Core i7-8700K").
+        benchmark_model: The Django model to search (CPUBenchmark or GPUBenchmark).
+
+    Returns:
+        The best matching benchmark object or None.
+    """
+    if not target_name:
+        return None
+
+    all_benchmarks = benchmark_model.objects.all()
+    if not all_benchmarks:
+        return None
+
+    best_similarity = 0.0
+    best_matches = []
+
+    # Step 1: Find the highest similarity ratio
+    for bench in all_benchmarks:
+        # The name field is either 'cpu' or 'gpu'
+        name_field = "cpu" if benchmark_model == CPUBenchmark else "gpu"
+        similarity = difflib.SequenceMatcher(
+            None, target_name.lower(), getattr(bench, name_field).lower()
+        ).ratio()
+
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_matches = [bench]
+        elif similarity == best_similarity:
+            best_matches.append(bench)
+
+    # Step 2: If the best similarity is reasonably high, proceed
+    SIMILARITY_THRESHOLD = 0.7  # Avoids matching completely unrelated things
+    if best_similarity < SIMILARITY_THRESHOLD:
+        print(
+            f"No good match found for '{target_name}'. Highest similarity was {best_similarity:.2f}, which is below threshold."
+        )
+        return None
+
+    # Step 3: From the best matches, pick the one with the highest score as a tie-breaker
+    if not best_matches:
+        return None
+
+    winner = max(best_matches, key=lambda b: b.score)
+    return winner
+
+
+# +++ OVERHAULED ApplicationSystemRequirement MODEL +++
 class ApplicationSystemRequirement(models.Model):
     application = models.ForeignKey(
         Application, on_delete=models.CASCADE, related_name="requirements"
@@ -67,54 +123,82 @@ class ApplicationSystemRequirement(models.Model):
     type = models.CharField(
         max_length=20, choices=[("minimum", "Minimum"), ("recommended", "Recommended")]
     )
-
     cpu = models.CharField(max_length=255)
     gpu = models.CharField(max_length=255)
-    cpu_score = models.IntegerField()
-    gpu_score = models.IntegerField()
+    cpu_score = models.IntegerField(null=True, blank=True)
+    gpu_score = models.IntegerField(null=True, blank=True)
     ram = models.IntegerField(help_text="RAM in GB")
-
-    # -- MODIFIED STORAGE --
-    storage_size = models.IntegerField(
-        help_text="Storage in GB"
-    )  # Renamed from 'storage'
+    storage_size = models.IntegerField(help_text="Storage in GB")
     storage_type = models.CharField(
         max_length=10,
         choices=[("SSD", "SSD"), ("HDD", "HDD"), ("Any", "Any")],
         default="Any",
-    )  # ++ ADDED ++
-    storage_score = models.IntegerField(
-        null=True, blank=True, help_text="Target score from DiskBenchmark"
-    )  # ++ ADDED ++
+    )
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
+    def _get_benchmark_score(self, requirement_name, benchmark_model, component_type):
+        """
+        Finds a benchmark score by splitting a requirement string by 'or', '/', or ',',
+        finding the best match for each part, and returning the highest score found.
+        """
+        if not requirement_name or not requirement_name.strip():
+            return None
+
+        # +++ THE CORRECTED REGEX +++
+        # \b ensures we only match the whole word "or" and not letters within a word.
+        separators = r"\s*(?:\b(or)\b|/|,)\s*"
+
+        component_parts = re.split(separators, requirement_name, flags=re.IGNORECASE)
+
+        # The new regex might create None entries in the list, so we filter them out.
+        component_parts = [part for part in component_parts if part]
+
+        found_scores = []
+
+        print(f"Splitting '{requirement_name}' into: {component_parts}")
+
+        for part in component_parts:
+            # The rest of the logic is already correct.
+            clean_part = part.strip()
+            if not clean_part:
+                continue
+            best_match_obj = find_best_benchmark_match(clean_part, benchmark_model)
+            if best_match_obj:
+                print(
+                    f"  -> Match found for part '{clean_part}': '{getattr(best_match_obj, component_type.lower())}' with score {best_match_obj.score}"
+                )
+                found_scores.append(best_match_obj.score)
+            else:
+                print(f"  -> No match found for part '{clean_part}'.")
+
+        if found_scores:
+            highest_score = max(found_scores)
+            print(
+                f"Found scores {found_scores}. Selecting the highest: {highest_score}"
+            )
+            return highest_score
+
+        print(f"CRITICAL: Could not find a score for any part of '{requirement_name}'.")
+        return None
+
     def save(self, *args, **kwargs):
         """
-        Overrides the default save method to intelligently find the best benchmark
-        for the given CPU and GPU names.
+        Orchestrates finding scores for CPU and GPU. This part remains unchanged
+        as it correctly calls the helper function whose logic we just updated.
         """
-        # --- CPU ---
+        if self.cpu and self.cpu_score is None:
+            self.cpu_score = self._get_benchmark_score(self.cpu, CPUBenchmark, "CPU")
 
-        from .logic.utils import find_best_benchmark
+        if self.gpu and self.gpu_score is None:
+            self.gpu_score = self._get_benchmark_score(self.gpu, GPUBenchmark, "GPU")
 
-        if self.cpu and self.cpu_score == 0:
-            # Use our new advanced search function
-            best_cpu = find_best_benchmark(self.cpu, "cpu")
-            if best_cpu:
-                # If a best match is found, we use ITS data.
-                # This corrects the AI's vague name to a precise one from our DB.
-                self.cpu = best_cpu.cpu
-                self.cpu_score = best_cpu.score
-
-        # --- GPU ---
-        if self.gpu and self.gpu_score == 0:
-            # Use our new advanced search function
-            best_gpu = find_best_benchmark(self.gpu, "gpu")
-            if best_gpu:
-                self.gpu = best_gpu.gpu
-                self.gpu_score = best_gpu.score
+        # Final check to prevent DB error if everything failed
+        if self.cpu_score is None or self.gpu_score is None:
+            print(
+                f"WARNING: Could not determine a score for CPU or GPU for '{self.application.name} ({self.type})'. Saving with null values."
+            )
 
         super().save(*args, **kwargs)
 

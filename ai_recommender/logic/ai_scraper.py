@@ -1,101 +1,122 @@
+# ai_recommender/logic/ai_scraper.py
+
 import os
 import openai
 import google.generativeai as genai
-import re
+import time
 import json
 
-
+# --- Client Initialization ---
+# This part remains the same. It's good practice.
 try:
     client = openai.OpenAI()
 except openai.OpenAIError as e:
     print(f"Error initializing OpenAI client: {e}")
     client = None
 
-# --- Gemini Configuration (No changes needed) ---
 try:
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 except Exception as e:
     print(f"Error configuring Gemini API: {e}")
 
 
-# --- Helper functions for each AI (Updated for new OpenAI syntax) ---
-def ask_openai(prompt: str) -> str:
-    if not client:
-        print("OpenAI client not initialized. Skipping OpenAI call.")
-        return ""
-
-    try:
-        system = "You are a helpful assistant that gives detailed application system requirements in a specific, structured JSON format."
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ]
-
-        # --- THIS IS THE KEY CHANGE ---
-        # The new syntax uses client.chat.completions.create()
-        response = client.chat.completions.create(
-            model="gpt-4o",  # Using a more modern, JSON-friendly model
-            messages=messages,
-            temperature=0.1,
-            response_format={"type": "json_object"},  # Force JSON output
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"Error calling OpenAI API: {e}")
-        return ""  # Return empty string on failure
+# --- Private Helper Functions ---
 
 
-def ask_gemini(prompt: str) -> str:
+def _ask_gemini(prompt: str) -> str:
     """
-    Queries Gemini and robustly extracts the JSON object from its response.
+    A private helper to query Gemini. Returns an empty string on failure.
     """
     try:
-        # It's better to instantiate the model each time or handle potential config errors.
-        model = genai.GenerativeModel(
-            "gemini-1.5-flash-latest"
-        )  # Using a newer, faster model
-
-        # We can also tell Gemini we expect JSON in the generation config
+        print("Attempting to query Gemini model: gemini-1.5-flash-latest...")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         generation_config = genai.types.GenerationConfig(
             response_mime_type="application/json", temperature=0.1
         )
-
         response = model.generate_content(prompt, generation_config=generation_config)
 
-        # Even with the mime_type hint, it's good to be safe.
-        # Find the JSON block using a regular expression.
-        # This looks for the first '{' to the last '}'
-        json_match = re.search(r"\{.*\}", response.text, re.DOTALL)
-
-        if json_match:
-            json_string = json_match.group(0)
-            # Final check to ensure it's valid JSON
-            try:
-                json.loads(json_string)
-                return json_string
-            except json.JSONDecodeError:
-                print("Gemini response contained invalid JSON. Discarding.")
-                return ""
+        # The API with `application/json` should return a clean JSON string.
+        # We perform a basic check to ensure it's not empty and looks like JSON.
+        if response.text and response.text.strip().startswith("{"):
+            print("Successfully received response from Gemini.")
+            return response.text
         else:
-            print("No valid JSON object found in Gemini's response.")
+            print(f"Gemini returned an invalid or empty response: {response.text}")
             return ""
-
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
+        # The API library will print its own specific error (e.g., 429 Quota Exceeded)
+        print(f"An error occurred while calling Gemini API: {e}")
         return ""
 
 
-# --- Main function to call all AIs (No changes needed) ---
-def query_all_ais(prompt: str) -> list[str]:
+def _ask_openai(prompt: str) -> str:
     """
-    Queries all configured AI models with the same prompt.
+    A private helper that tries a chain of OpenAI models, returning the first
+    successful response. Returns an empty string on failure.
     """
-    # For production, consider using threading or asyncio for true parallelism
-    responses = [
-        ask_openai(prompt),
-        ask_gemini(prompt),
-    ]
-    # Filter out any failed (empty) responses
-    valid_responses = [resp for resp in responses if resp]
-    print(f"Received {len(valid_responses)} valid responses from AIs.")
-    return valid_responses
+    if not client:
+        print("OpenAI client not initialized. Skipping all OpenAI calls.")
+        return ""
+
+    # Chain of models to try, from best/newest to most common.
+    models_to_try = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+
+    for model_name in models_to_try:
+        try:
+            print(f"Attempting to query OpenAI model: {model_name}...")
+            system_prompt = "You are a helpful assistant that gives detailed application system requirements in a specific, structured JSON format. Your entire response must be ONLY the JSON object, with no other text."
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content
+            if content:
+                print(f"Successfully received response from OpenAI model: {model_name}")
+                return content
+        except Exception as e:
+            # The openai library often prints useful info in the exception.
+            print(f"Error calling OpenAI model '{model_name}': {e}")
+            # Wait a moment before trying the next model in the chain.
+            time.sleep(1)
+            continue  # Move to the next model
+
+    print("All OpenAI models failed or returned no response.")
+    return ""
+
+
+# --- The ONLY Public Function Exposed to the Rest of the Application ---
+
+
+def get_ai_response(prompt: str) -> str:
+    """
+    Gets a structured JSON response from an AI service.
+
+    It follows a specific fallback strategy:
+    1. Try Gemini first.
+    2. If Gemini fails, fall back to the OpenAI model chain (gpt-4o -> gpt-4-turbo -> gpt-3.5-turbo).
+
+    Returns:
+        A string containing the AI's JSON response, or an empty string if all services fail.
+    """
+    # --- STRATEGY 1: TRY GEMINI ---
+    gemini_response = _ask_gemini(prompt)
+    if gemini_response:
+        return gemini_response
+
+    # --- STRATEGY 2: FALLBACK TO OPENAI ---
+    print("\nGemini failed. Falling back to the OpenAI model chain...")
+    time.sleep(1)  # A small pause before switching services
+    openai_response = _ask_openai(prompt)
+    if openai_response:
+        return openai_response
+
+    # --- FINAL FAILURE ---
+    print(
+        "\nCRITICAL: All AI services (Gemini and OpenAI) failed to provide a response."
+    )
+    return ""

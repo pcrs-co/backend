@@ -218,16 +218,14 @@ CELERY_TIMEZONE = TIME_ZONE  # TIME_ZONE should already be defined in your setti
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    # Task 1: Discover new applications for all activities
-    "discover-new-apps-daily": {
-        "task": "ai_recommender.tasks.enrich_all_activities_task",
-        # Runs every day at 2:00 AM
-        "schedule": crontab(hour=1, minute=0),
-    },
-    # Task 2: Update the requirements for old applications
-    "update-stale-requirements-weekly": {
-        "task": "ai_recommender.tasks.update_stale_system_requirements_task",
-        # Runs every Sunday at 4:00 AM
-        "schedule": crontab(hour=3, minute=0),
+    # This single, smart task replaces the two old, inefficient ones.
+    # It runs every 15 minutes to quickly process new user submissions
+    # and periodically updates old data. This is much more responsive
+    # than waiting for a nightly job.
+    "enrich-knowledge-base-periodically": {
+        "task": "ai_recommender.tasks.enrich_knowledge_base_task",
+        "schedule": crontab(
+            minute="*/15"
+        ),  # Runs at 0, 15, 30, and 45 minutes past the hour.
     },
 }

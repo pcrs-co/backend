@@ -1,138 +1,140 @@
-from .ai_scraper import ask_gemini, ask_openai, query_all_ais
-from .utils import clean_and_convert_to_int
-from .ai_extractor import find_consensus_response, extract_requirements_from_response
-from ..models import (
-    Application,
-    Activity,
-    RequirementExtractionLog,
-    ApplicationExtractionLog,
-)
-import json
+# ai_recommender/logic/ai_discovery.py
+
+from ..models import Activity, Application, ApplicationSystemRequirement
+from .ai_scraper import get_ai_response
 from django.db import transaction
+import json
 
 
-def discover_applications_for_activity(activity: Activity):
+def _save_single_enriched_app_data(
+    app_data: dict, activity: Activity
+) -> Application | None:
     """
-    Uses AI to find a list of common applications for a given activity.
+    Helper function to save the data for a single application from the AI's response.
+    It handles checking for existing apps and linking them correctly.
     """
-    prompt = f"""
-    List the top 5 most popular and essential software applications for the activity: "{activity.name}".
-    Your response MUST be a single, valid JSON object with a single key "applications" which is an array of strings.
-    Example: {{"applications": ["Application One", "Application Two", "Another App"]}}
-    """
-
-    # --- STRATEGY 1: TRY OPENAI ---
-    print("Attempting to discover applications using OpenAI...")
-    raw_response = ask_openai(prompt)
-    method_used = "openai-discovery"
-
-    # --- STRATEGY 2: FALLBACK TO GEMINI ---
-    if not raw_response:
-        print("OpenAI failed or returned no response. Falling back to Gemini...")
-        raw_response = ask_gemini(prompt)
-        method_used = "gemini-discovery-fallback"
-
-    if not raw_response:
-        print("Both OpenAI and Gemini failed to return a response.")
-        ApplicationExtractionLog.objects.create(
-            activity=activity,
-            source_text=prompt,
-            extracted_apps={"error": "No response from AIs"},
-            method="failed-discovery",
-            confidence=0.0,
-        )
-        return []
+    app_name = app_data.get("name")
+    if not app_name:
+        return None
 
     try:
-        data = json.loads(raw_response)
-        app_names = data.get("applications", [])
-        ApplicationExtractionLog.objects.create(
-            activity=activity,
-            source_text=prompt,
-            extracted_apps={"applications": app_names},
-            method=method_used,
-            confidence=0.9,
-        )
-        print(f"Successfully discovered applications via {method_used}.")
-        return app_names
-    except (json.JSONDecodeError, AttributeError):
-        print(f"Failed to parse JSON response from AI: {raw_response}")
-        ApplicationExtractionLog.objects.create(
-            activity=activity,
-            source_text=raw_response,
-            extracted_apps={"error": "JSON parse failed"},
-            method=method_used,
-            confidence=0.2,
-        )
-        return []
+        with transaction.atomic():
+            # Check if this application already exists.
+            application, created = Application.objects.get_or_create(
+                name__iexact=app_name.strip(),
+                defaults={
+                    "name": app_name.strip(),
+                    "activity": activity,
+                    "source": app_data.get("source"),
+                    "intensity_level": app_data.get("intensity_level", "medium"),
+                },
+            )
+
+            # If the app was newly created, it needs its requirements added.
+            if created:
+                print(
+                    f"Creating new application '{application.name}' with requirements."
+                )
+                requirements_data = app_data.get("requirements", [])
+                for req in requirements_data:
+                    # The model's smart .save() method will handle fetching scores.
+                    ApplicationSystemRequirement.objects.create(
+                        application=application,
+                        type=req.get("type"),
+                        cpu=req.get("cpu"),
+                        gpu=req.get("gpu"),
+                        ram=req.get("ram", 0),
+                        storage_size=req.get("storage_size", 0),
+                        storage_type=req.get("storage_type", "Any"),
+                    )
+            else:
+                # If the app already existed, just ensure it's linked to this new activity.
+                print(
+                    f"Application '{application.name}' already exists. Linking to activity '{activity.name}'."
+                )
+                application.activity = activity  # You might want to use a ManyToManyField here in the future
+                application.save()
+
+            return application
+    except Exception as e:
+        print(f"DATABASE ERROR while saving app '{app_name}': {e}")
+        return None
 
 
-def discover_and_save_requirements(app_name: str, activity: Activity):
+def discover_and_enrich_apps_for_activity(activity: Activity) -> list[Application]:
     """
-    Main enrichment function. Finds system requirements for a single application,
-    saves them to the database, and handles both creation and updates.
+    Uses a single, powerful AI call to get the top 3 applications for an activity
+    AND their system requirements all at once.
+
+    Returns a list of the Application objects that were created or linked.
     """
-    app = Application.objects.filter(name__iexact=app_name).first()
+    print(f"Starting one-shot AI discovery for activity: '{activity.name}'")
 
     prompt = f"""
-    Give me the system requirements for the application: "{app_name}".
-    Provide both "minimum" and "recommended" specifications.
-    For storage, specify the recommended type (e.g., "SSD" or "HDD") if mentioned, and always provide size in GB. If the requirements say "SSD Recommended", set the storage_type to "SSD".
+    Give me the top 3 most popular and essential software applications for the activity: "{activity.name}".
+    For each application, provide its system requirements.
     Your response MUST be a single, valid JSON object. Do not add any text before or after the JSON.
+    The root key must be "discovered_applications", which is an array of application objects.
+    Each application object must have the following exact structure:
     {{
       "name": "Corrected App Name",
-      "source": "A valid URL to the official requirements page",
+      "source": "A valid URL to the official requirements page, or null if not found",
       "intensity_level": "low, medium, or high",
       "requirements": [
         {{"type": "minimum", "cpu": "Intel Core i5-6600K", "gpu": "NVIDIA GeForce GTX 970", "ram": 8, "storage_size": 50, "storage_type": "HDD"}},
         {{"type": "recommended", "cpu": "Intel Core i7-8700K", "gpu": "NVIDIA GeForce GTX 1080 Ti", "ram": 16, "storage_size": 50, "storage_type": "SSD"}}
       ]
     }}
+
+    Example JSON response format:
+    {{
+        "discovered_applications": [
+            {{
+                "name": "Blender",
+                "source": "https://www.blender.org/download/requirements/",
+                "intensity_level": "high",
+                "requirements": [
+                    {{"type": "minimum", "cpu": "Intel Core i3", "gpu": "NVIDIA GeForce 400 Series", "ram": 8, "storage_size": 1, "storage_type": "HDD"}},
+                    {{"type": "recommended", "cpu": "Intel Core i9", "gpu": "NVIDIA GeForce RTX 3060", "ram": 32, "storage_size": 2, "storage_type": "SSD"}}
+                ]
+            }},
+            {{
+                "name": "Autodesk Maya",
+                "source": null,
+                "intensity_level": "high",
+                "requirements": [
+                    {{"type": "minimum", "cpu": "Intel Core i5", "gpu": "NVIDIA Quadro P600", "ram": 8, "storage_size": 7, "storage_type": "HDD"}},
+                    {{"type": "recommended", "cpu": "Intel Core i7", "gpu": "NVIDIA Quadro RTX 4000", "ram": 16, "storage_size": 7, "storage_type": "SSD"}}
+                ]
+            }}
+        ]
+    }}
     """
 
-    raw_responses = query_all_ais(prompt)
-    if not raw_responses:
-        print(f"Could not get any AI response for '{app_name}'. Aborting.")
-        return None
+    # We use ask_openai directly here as it's configured to expect JSON.
+    raw_response = get_ai_response(prompt)
+
+    if not raw_response:
+        print(f"AI failed to return a response for '{activity.name}'.")
+        return []
 
     try:
-        structured = find_consensus_response(raw_responses)
-    except ValueError as e:
-        print(f"Could not get consensus for '{app_name}': {e}")
-        return None
+        data = json.loads(raw_response)
+        applications_data = data.get("discovered_applications", [])
 
-    with transaction.atomic():
-        if not app:
-            app = Application.objects.create(
-                name=structured.get("name", app_name),
-                source=structured.get("source"),
-                intensity_level=structured.get("intensity_level", "medium"),
-                activity=activity,
-            )
-        else:
-            app.source = structured.get("source", app.source)
-            app.intensity_level = structured.get("intensity_level", app.intensity_level)
-            app.activity = activity  # Ensure it's linked to the current activity
-            app.save()
+        processed_apps = []
+        for app_data in applications_data:
+            app_object = _save_single_enriched_app_data(app_data, activity)
+            if app_object:
+                processed_apps.append(app_object)
 
-        RequirementExtractionLog.objects.create(
-            application=app,
-            source_text="\n---\n".join(raw_responses),
-            extracted_json=structured,
-            method="multi-ai-consensus",
+        return processed_apps
+
+    except json.JSONDecodeError:
+        print(
+            f"Failed to parse JSON response from AI for activity '{activity.name}': {raw_response}"
         )
-
-        app.requirements.all().delete()
-        for req in structured.get("requirements", []):
-            # The model's .save() method will handle fetching scores automatically.
-            # We just provide the raw data.
-            app.requirements.create(
-                type=req.get("type"),
-                cpu=req.get("cpu"),
-                gpu=req.get("gpu"),
-                ram=clean_and_convert_to_int(req.get("ram", 0)),
-                storage_size=clean_and_convert_to_int(req.get("storage_size", 0)),
-                storage_type=req.get("storage_type", "Any"),
-                notes=req.get("notes", ""),
-            )
-    return app
+        return []
+    except Exception as e:
+        print(f"An unexpected error occurred during AI data processing: {e}")
+        return []
