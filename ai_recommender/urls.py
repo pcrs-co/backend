@@ -10,10 +10,12 @@ router.register("admin/applications", ApplicationViewSet)
 router.register("admin/requirements", ApplicationSystemRequirementViewSet)
 
 urlpatterns = [
-    path("user_preference/", UserPreferenceView.as_view(), name="user_preference"),
+    path(
+        "suggestions/", SuggestionView.as_view(), name="suggestions-list"
+    ),  # <-- ADD THIS
     path(
         "recommend/",
-        GenerateRecommendationView.as_view(),
+        RecommendView.as_view(),
         name="generate-recommendation",
     ),
     path("recommend_product/", ProductRecommendationView.as_view(), name="recommend"),

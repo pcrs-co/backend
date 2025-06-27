@@ -228,4 +228,9 @@ CELERY_BEAT_SCHEDULE = {
             minute="*/15"
         ),  # Runs at 0, 15, 30, and 45 minutes past the hour.
     },
+    "enrich-activities-weekly": {
+        "task": "ai_recommender.tasks.periodically_enrich_activities_task",
+        # Runs every Sunday at midnight
+        "schedule": crontab(day_of_week="sunday", hour=0, minute=0),
+    },
 }

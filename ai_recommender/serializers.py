@@ -50,6 +50,104 @@ class ApplicationSerializer(serializers.ModelSerializer):
 
 
 # +++ UPGRADED UserPreferenceSerializer +++
+# class UserPreferenceSerializer(serializers.ModelSerializer):
+#     """
+#     Handles the creation and retrieval of a UserPreference.
+
+#     On CREATE (POST):
+#     - Accepts 'primary_activity', 'secondary_activities', 'budget', and 'session_id'.
+#     - Validates the input to ensure data quality.
+#     - Triggers a background task to enrich the preference with application data.
+
+#     On RETRIEVE (GET):
+#     - Displays the preference details, including a nested list of linked activities.
+#     """
+
+#     # --- Fields for WRITE operations (when a user submits data) ---
+#     primary_activity = serializers.CharField(
+#         write_only=True,
+#         help_text="The main activity the user is interested in (e.g., 'Video Editing').",
+#     )
+#     secondary_activities = serializers.ListField(
+#         child=serializers.CharField(),
+#         write_only=True,
+#         required=False,
+#         allow_empty=True,
+#         help_text="A list of other related activities.",
+#     )
+
+#     # --- Fields for READ operations (when the API returns data) ---
+#     activities = ActivitySerializer(many=True, read_only=True)
+
+#     # Session ID is write-only for anonymous users, but we might want to read it back.
+#     # The 'user' field will be automatically populated from the request context.
+#     session_id = serializers.UUIDField(required=False)
+
+#     class Meta:
+#         model = UserPreference
+#         # Define fields for both reading and writing.
+#         fields = [
+#             "id",
+#             "user",
+#             "session_id",
+#             "budget",
+#             "created_at",
+#             "activities",  # For reading
+#             "primary_activity",
+#             "secondary_activities",  # For writing
+#         ]
+#         read_only_fields = ["id", "user", "created_at", "activities"]
+
+#     def validate_primary_activity(self, value):
+#         """Ensures the primary activity is not empty or just whitespace."""
+#         if not value or not value.strip():
+#             raise serializers.ValidationError("Primary activity cannot be empty.")
+#         return value.strip()
+
+#     def create(self, validated_data):
+#         """
+#         Custom create logic to handle activities and trigger the background task.
+#         """
+#         # 1. Get the current user from the request context.
+#         user = self.context["request"].user
+
+#         # 2. Extract activity names from the validated data.
+#         primary_activity_name = validated_data.pop("primary_activity")
+#         secondary_activity_names = validated_data.pop("secondary_activities", [])
+
+#         # 3. Create the core UserPreference object.
+#         preference_data = {**validated_data}
+#         if user.is_authenticated:
+#             preference_data["user"] = user
+#             # Don't save a session_id for logged-in users.
+#             preference_data.pop("session_id", None)
+#         else:
+#             preference_data["session_id"] = validated_data.get(
+#                 "session_id", uuid.uuid4()
+#             )
+
+#         preference = UserPreference.objects.create(**preference_data)
+
+#         # 4. Process all activities, get or create them, and link to the preference.
+#         all_activity_names = [primary_activity_name] + secondary_activity_names
+#         for activity_name in all_activity_names:
+#             # Clean up the name and skip if it's empty after stripping.
+#             clean_name = activity_name.strip()
+#             if clean_name:
+#                 activity, _ = Activity.objects.get_or_create(
+#                     name__iexact=clean_name, defaults={"name": clean_name}
+#                 )
+#                 preference.activities.add(activity)
+
+#         # 5. Trigger the focused background task to discover and enrich applications.
+#         #    This makes the API response immediate for the user.
+#         enrich_user_preference_task.delay(
+#             preference.id
+#         )  # ++ FIXED: Completed the function call
+
+#         return preference
+
+
 class UserPreferenceSerializer(serializers.ModelSerializer):
     """
     Handles the creation and retrieval of a UserPreference.
@@ -106,7 +204,9 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """
-        Custom create logic to handle activities and trigger the background task.
+        Custom create logic to handle activities.
+        This now ONLY creates the preference object and links activities.
+        The AI enrichment is handled by the view that calls this serializer.
         """
         # 1. Get the current user from the request context.
         user = self.context["request"].user
@@ -119,7 +219,6 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
         preference_data = {**validated_data}
         if user.is_authenticated:
             preference_data["user"] = user
-            # Don't save a session_id for logged-in users.
             preference_data.pop("session_id", None)
         else:
             preference_data["session_id"] = validated_data.get(
@@ -131,7 +230,6 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
         # 4. Process all activities, get or create them, and link to the preference.
         all_activity_names = [primary_activity_name] + secondary_activity_names
         for activity_name in all_activity_names:
-            # Clean up the name and skip if it's empty after stripping.
             clean_name = activity_name.strip()
             if clean_name:
                 activity, _ = Activity.objects.get_or_create(
@@ -139,13 +237,12 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
                 )
                 preference.activities.add(activity)
 
-        # 5. Trigger the focused background task to discover and enrich applications.
-        #    This makes the API response immediate for the user.
-        enrich_user_preference_task.delay(
-            preference.id
-        )  # ++ FIXED: Completed the function call
+        # --- FIX: REMOVE THE REDUNDANT BACKGROUND TASK ---
+        # enrich_user_preference_task.delay(
+        #     preference.id
+        # )
 
-        return preference
+        return preference  # Return the created preference object
 
 
 # +++ UPGRADED RecommendationSpecificationSerializer +++
@@ -189,3 +286,14 @@ class RecommendationSpecificationSerializer(serializers.ModelSerializer):
             "storage_gb": obj.recommended_storage_size or 0,
             "storage_type": obj.recommended_storage_type or "Any",
         }
+
+
+class SuggestionSerializer(serializers.Serializer):
+    """
+    A simple serializer to format the data for the frontend's autocomplete.
+    """
+
+    activities = serializers.ListField(child=serializers.CharField())
+
+    class Meta:
+        fields = ["activities"]

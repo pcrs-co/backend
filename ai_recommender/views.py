@@ -8,6 +8,7 @@ from rest_framework.pagination import PageNumberPagination
 from .models import *
 from .serializers import *
 from .logic.recommendation_engine import generate_recommendation
+from .logic.ai_discovery import discover_and_enrich_apps_for_activity
 from .mixins import AsynchronousBenchmarkUploadMixin
 from vendor.models import Product
 from vendor.serializers import ProductRecommendationSerializer
@@ -75,62 +76,67 @@ class ApplicationSystemRequirementViewSet(viewsets.ModelViewSet):
 # ===================================================================
 
 
-class UserPreferenceView(APIView):
-    """
-    Handles the submission of a user's preferences.
-    This view accepts the user's activities and applications, saves them,
-    and triggers a high-priority background task to enrich the data.
-    """
+class RecommendView(APIView):
+    permission_classes = [AllowAny]
 
-    permission_classes = [AllowAny]  # Allow anonymous users
-
-    def post(self, request):
-        # The serializer now handles creating the preference and triggering the Celery task.
+    def post(self, request, *args, **kwargs):
+        """
+        This single endpoint now orchestrates the entire recommendation process.
+        1. Validates user input and creates a UserPreference.
+        2. Runs AI discovery to find applications for the given activities.
+        3. Generates the final hardware specification recommendation.
+        4. Returns the specs to the frontend.
+        """
+        # Step 1: Validate input and create the UserPreference object
+        # We can still use our excellent serializer for this.
         serializer = UserPreferenceSerializer(
             data=request.data, context={"request": request}
         )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # We return a simple success message. The frontend knows to start polling.
-        return Response(
-            {"message": "Preferences received and analysis started."},
-            status=status.HTTP_201_CREATED,
-        )
+        # The .save() method on the serializer will create the preference and link activities
+        preference = serializer.save()
 
+        # --- Step 2: Perform AI Enrichment Synchronously ---
+        # Instead of a Celery task, we do the work right here, because the user is waiting.
+        user_activities = preference.activities.all()
 
-class GenerateRecommendationView(APIView):
-    """
-    Generates and returns the final hardware specifications.
-    This is the endpoint the frontend will poll.
-    """
+        print(f"--- Starting Synchronous Enrichment for Preference {preference.id} ---")
+        for activity in user_activities:
+            # Only run the expensive AI call if we don't already have data for this activity
+            if not activity.applications.exists():
+                print(f"-> Activity '{activity.name}' is new. Running AI discovery...")
+                newly_processed_apps = discover_and_enrich_apps_for_activity(activity)
+                if newly_processed_apps:
+                    preference.applications.add(*newly_processed_apps)
+            else:
+                print(
+                    f"-> Activity '{activity.name}' is already known. Linking existing apps."
+                )
+                existing_apps = activity.applications.all()
+                preference.applications.add(*existing_apps)
 
-    permission_classes = [AllowAny]
+        print(f"--- Enrichment complete for Preference {preference.id} ---")
 
-    def post(self, request):
+        # --- Step 3: Generate the final recommendation ---
+        # This function will now find a fully enriched preference object
         user = request.user if request.user.is_authenticated else None
-        # The session_id comes from the frontend API call
-        session_id = request.data.get("session_id")
+        session_id = preference.session_id if not user else None
 
-        if not user and not session_id:
-            return Response(
-                {"error": "User or session_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        final_spec = generate_recommendation(user=user, session_id=session_id)
 
-        recommendation = generate_recommendation(user=user, session_id=session_id)
-
-        if not recommendation:
+        if not final_spec:
             return Response(
                 {
-                    "error": "Could not determine any specs. The AI might still be processing your request."
+                    "detail": "Could not generate a recommendation. The AI may have been unable to find requirements for the specified activities."
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Use the dedicated serializer to format the response correctly for the frontend.
-        serializer = RecommendationSpecificationSerializer(recommendation)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # --- Step 4: Serialize and return the result ---
+        result_serializer = RecommendationSpecificationSerializer(final_spec)
+        return Response(result_serializer.data, status=status.HTTP_200_OK)
 
 
 class ProductRecommendationView(APIView):
@@ -190,3 +196,24 @@ class ProductRecommendationView(APIView):
         serializer = ProductRecommendationSerializer(paginated_products, many=True)
 
         return paginator.get_paginated_response(serializer.data)
+
+
+class SuggestionView(generics.GenericAPIView):
+    """
+    Provides a list of all unique activity names for frontend autocomplete suggestions.
+    This endpoint is public and cached for performance.
+    """
+
+    permission_classes = [AllowAny]
+    serializer_class = SuggestionSerializer
+
+    def get(self, request, *args, **kwargs):
+        # Fetch unique, non-empty activity names, ordered alphabetically
+        activities = (
+            Activity.objects.values_list("name", flat=True).distinct().order_by("name")
+        )
+
+        # Create the data structure the serializer expects
+        data = {"activities": list(activities)}
+
+        return Response(data, status=status.HTTP_200_OK)

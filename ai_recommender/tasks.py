@@ -6,7 +6,7 @@ import time
 import base64
 from io import BytesIO
 import pandas as pd
-from .models import UserPreference
+from .models import Activity, UserPreference
 from .logic.ai_discovery import discover_and_enrich_apps_for_activity
 
 
@@ -79,4 +79,46 @@ def enrich_user_preference_task(preference_id):
 
     final_message = f"Enrichment task complete for preference {preference_id}."
     print(f"--- {final_message} ---")
+    return final_message
+
+
+@shared_task
+def periodically_enrich_activities_task():
+    """
+    A weekly task that iterates through all known activities in the database
+    and runs the AI discovery process to find and add any new, popular applications
+    that may have emerged.
+    """
+    print(f"--- [{timezone.now()}] Starting Weekly Activity Enrichment Task ---")
+    all_activities = Activity.objects.all()
+
+    if not all_activities.exists():
+        print("No activities found in the database. Task finished.")
+        return "No activities to process."
+
+    print(f"Found {all_activities.count()} activities to check for enrichment.")
+
+    for activity in all_activities:
+        print(f"\n-> Processing activity: '{activity.name}' (ID: {activity.id})")
+
+        # The function `discover_and_enrich_apps_for_activity` is perfect for this.
+        # It calls the AI, gets the current top apps, and uses get_or_create,
+        # so it will only add applications that don't already exist by name.
+        # It intelligently handles both new and existing apps.
+        newly_processed_apps = discover_and_enrich_apps_for_activity(activity)
+
+        if newly_processed_apps:
+            print(
+                f"-> Enrichment successful for '{activity.name}'. Processed {len(newly_processed_apps)} applications."
+            )
+        else:
+            print(
+                f"-> Enrichment for '{activity.name}' resulted in no new applications or failed."
+            )
+
+        # Be a good citizen to the AI API provider, even on a weekly task.
+        time.sleep(10)
+
+    final_message = f"--- Weekly Activity Enrichment Task Completed Successfully at {timezone.now()} ---"
+    print(final_message)
     return final_message
