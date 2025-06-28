@@ -192,40 +192,40 @@ class ApplicationSystemRequirement(models.Model):
         print(f"CRITICAL: Could not find a score for any part of '{requirement_name}'.")
         return None
 
-    # def save(self, *args, **kwargs):
-    #     """
-    #     Orchestrates finding scores for CPU and GPU. This part remains unchanged
-    #     as it correctly calls the helper function whose logic we just updated.
-    #     """
-    #     if self.cpu and self.cpu_score is None:
-    #         self.cpu_score = self._get_benchmark_score(self.cpu, CPUBenchmark, "CPU")
-
-    #     if self.gpu and self.gpu_score is None:
-    #         self.gpu_score = self._get_benchmark_score(self.gpu, GPUBenchmark, "GPU")
-
-    #     # Final check to prevent DB error if everything failed
-    #     if self.cpu_score is None or self.gpu_score is None:
-    #         print(
-    #             f"WARNING: Could not determine a score for CPU or GPU for '{self.application.name} ({self.type})'. Saving with null values."
-    #         )
-
-    #     super().save(*args, **kwargs)
-
     def save(self, *args, **kwargs):
-        """Orchestrates finding scores for CPU and GPU using the new structured method."""
+        """
+        Orchestrates finding scores for CPU and GPU. This part remains unchanged
+        as it correctly calls the helper function whose logic we just updated.
+        """
         if self.cpu and self.cpu_score is None:
-            # ++ USE THE NEW SMARTER FUNCTION ++
-            best_match_obj = get_structured_component(self.cpu, "CPU")
-            if best_match_obj:
-                self.cpu_score = best_match_obj.score
+            self.cpu_score = self._get_benchmark_score(self.cpu, CPUBenchmark, "CPU")
 
         if self.gpu and self.gpu_score is None:
-            # ++ USE THE NEW SMARTER FUNCTION ++
-            best_match_obj = get_structured_component(self.gpu, "GPU")
-            if best_match_obj:
-                self.gpu_score = best_match_obj.score
+            self.gpu_score = self._get_benchmark_score(self.gpu, GPUBenchmark, "GPU")
+
+        # Final check to prevent DB error if everything failed
+        if self.cpu_score is None or self.gpu_score is None:
+            print(
+                f"WARNING: Could not determine a score for CPU or GPU for '{self.application.name} ({self.type})'. Saving with null values."
+            )
 
         super().save(*args, **kwargs)
+
+    # def save(self, *args, **kwargs):
+    #     """Orchestrates finding scores for CPU and GPU using the new structured method."""
+    #     if self.cpu and self.cpu_score is None:
+    #         # ++ USE THE NEW SMARTER FUNCTION ++
+    #         best_match_obj = get_structured_component(self.cpu, "CPU")
+    #         if best_match_obj:
+    #             self.cpu_score = best_match_obj.score
+
+    #     if self.gpu and self.gpu_score is None:
+    #         # ++ USE THE NEW SMARTER FUNCTION ++
+    #         best_match_obj = get_structured_component(self.gpu, "GPU")
+    #         if best_match_obj:
+    #             self.gpu_score = best_match_obj.score
+
+    #     super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.application.name} ({self.type})"
