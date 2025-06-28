@@ -2,6 +2,7 @@ import re
 from login_and_register.models import *
 from django.db.models import Q
 from django.db import models
+from .logic.web_extractor import get_structured_component
 import difflib
 import uuid
 
@@ -147,27 +148,35 @@ class ApplicationSystemRequirement(models.Model):
             return None
 
         # +++ THE CORRECTED REGEX +++
-        # \b ensures we only match the whole word "or" and not letters within a word.
-        separators = r"\s*(?:\b(or)\b|/|,)\s*"
-
+        # This regex looks for:
+        # \s+or\s+  -> The whole word "or" surrounded by one or more spaces.
+        # |          -> OR
+        # \s*/\s*    -> A forward slash, with optional spaces around it.
+        # |          -> OR
+        # \s*,\s*    -> A comma, with optional spaces around it.
+        # The re.IGNORECASE flag handles "Or", "OR", etc.
+        separators = r"\s+or\s+|\s*/\s*|\s*,\s*"
         component_parts = re.split(separators, requirement_name, flags=re.IGNORECASE)
+        # +++ END OF CORRECTION +++
 
-        # The new regex might create None entries in the list, so we filter them out.
-        component_parts = [part for part in component_parts if part]
+        # Filter out any empty strings that might result from splitting
+        component_parts = [part for part in component_parts if part and part.strip()]
 
         found_scores = []
-
         print(f"Splitting '{requirement_name}' into: {component_parts}")
 
         for part in component_parts:
-            # The rest of the logic is already correct.
             clean_part = part.strip()
             if not clean_part:
                 continue
+
+            # This part of your logic is already good!
             best_match_obj = find_best_benchmark_match(clean_part, benchmark_model)
             if best_match_obj:
+                # The name field is either 'cpu' or 'gpu'
+                name_field = "cpu" if benchmark_model == CPUBenchmark else "gpu"
                 print(
-                    f"  -> Match found for part '{clean_part}': '{getattr(best_match_obj, component_type.lower())}' with score {best_match_obj.score}"
+                    f"  -> Match found for part '{clean_part}': '{getattr(best_match_obj, name_field)}' with score {best_match_obj.score}"
                 )
                 found_scores.append(best_match_obj.score)
             else:
@@ -183,22 +192,38 @@ class ApplicationSystemRequirement(models.Model):
         print(f"CRITICAL: Could not find a score for any part of '{requirement_name}'.")
         return None
 
+    # def save(self, *args, **kwargs):
+    #     """
+    #     Orchestrates finding scores for CPU and GPU. This part remains unchanged
+    #     as it correctly calls the helper function whose logic we just updated.
+    #     """
+    #     if self.cpu and self.cpu_score is None:
+    #         self.cpu_score = self._get_benchmark_score(self.cpu, CPUBenchmark, "CPU")
+
+    #     if self.gpu and self.gpu_score is None:
+    #         self.gpu_score = self._get_benchmark_score(self.gpu, GPUBenchmark, "GPU")
+
+    #     # Final check to prevent DB error if everything failed
+    #     if self.cpu_score is None or self.gpu_score is None:
+    #         print(
+    #             f"WARNING: Could not determine a score for CPU or GPU for '{self.application.name} ({self.type})'. Saving with null values."
+    #         )
+
+    #     super().save(*args, **kwargs)
+
     def save(self, *args, **kwargs):
-        """
-        Orchestrates finding scores for CPU and GPU. This part remains unchanged
-        as it correctly calls the helper function whose logic we just updated.
-        """
+        """Orchestrates finding scores for CPU and GPU using the new structured method."""
         if self.cpu and self.cpu_score is None:
-            self.cpu_score = self._get_benchmark_score(self.cpu, CPUBenchmark, "CPU")
+            # ++ USE THE NEW SMARTER FUNCTION ++
+            best_match_obj = get_structured_component(self.cpu, "CPU")
+            if best_match_obj:
+                self.cpu_score = best_match_obj.score
 
         if self.gpu and self.gpu_score is None:
-            self.gpu_score = self._get_benchmark_score(self.gpu, GPUBenchmark, "GPU")
-
-        # Final check to prevent DB error if everything failed
-        if self.cpu_score is None or self.gpu_score is None:
-            print(
-                f"WARNING: Could not determine a score for CPU or GPU for '{self.application.name} ({self.type})'. Saving with null values."
-            )
+            # ++ USE THE NEW SMARTER FUNCTION ++
+            best_match_obj = get_structured_component(self.gpu, "GPU")
+            if best_match_obj:
+                self.gpu_score = best_match_obj.score
 
         super().save(*args, **kwargs)
 

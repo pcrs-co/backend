@@ -19,4 +19,5 @@ urlpatterns = [
         name="generate-recommendation",
     ),
     path("recommend_product/", ProductRecommendationView.as_view(), name="recommend"),
+    path("recommend/latest/", LatestRecommendationView.as_view(), name="latest-recommendation"), # ADD
 ] + router.urls

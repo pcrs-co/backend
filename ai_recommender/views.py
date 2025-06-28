@@ -217,3 +217,39 @@ class SuggestionView(generics.GenericAPIView):
         data = {"activities": list(activities)}
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+class LatestRecommendationView(APIView):
+    """
+    Fetches the most recent RecommendationSpecification for the current user
+    or session_id, allowing the results page to be reloaded.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user if request.user.is_authenticated else None
+        session_id = request.query_params.get('session_id')
+
+        if not user and not session_id:
+            return Response(
+                {"detail": "User or session ID must be provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        spec_filter = {}
+        if user:
+            spec_filter['user'] = user
+        else:
+            spec_filter['session_id'] = session_id
+
+        # Find the most recently created recommendation that matches
+        latest_spec = RecommendationSpecification.objects.filter(**spec_filter).order_by('-created_at').first()
+
+        if not latest_spec:
+            return Response(
+                {"detail": "No recommendations found for this session."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = RecommendationSpecificationSerializer(latest_spec)
+        return Response(serializer.data, status=status.HTTP_200_OK)
