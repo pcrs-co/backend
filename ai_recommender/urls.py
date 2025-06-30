@@ -5,6 +5,7 @@ from .views import *
 router = DefaultRouter()
 router.register("admin/cpu-benchmarks", CPUBenchmarkViewSet)
 router.register("admin/gpu-benchmarks", GPUBenchmarkViewSet)
+router.register("admin/disk-benchmarks", DiskBenchmarkViewSet)
 router.register("admin/activities", ActivityViewSet)
 router.register("admin/applications", ApplicationViewSet)
 router.register("admin/requirements", ApplicationSystemRequirementViewSet)
@@ -19,5 +20,9 @@ urlpatterns = [
         name="generate-recommendation",
     ),
     path("recommend_product/", ProductRecommendationView.as_view(), name="recommend"),
-    path("recommend/latest/", LatestRecommendationView.as_view(), name="latest-recommendation"), # ADD
+    path(
+        "recommend/latest/",
+        LatestRecommendationView.as_view(),
+        name="latest-recommendation",
+    ),  # ADD
 ] + router.urls
