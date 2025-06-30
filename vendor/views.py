@@ -1,12 +1,13 @@
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import api_view, action
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework import generics
-from rest_framework.exceptions import PermissionDenied
-from rest_framework import status, viewsets
 from .serializers import *
 from .models import *
 
@@ -14,6 +15,8 @@ from .models import *
 class VendorProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ProductSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
     # The global paginator will be applied automatically to the list view.
 
     def get_queryset(self):

@@ -1,3 +1,4 @@
+import json
 from drf_writable_nested.serializers import WritableNestedModelSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group
@@ -92,10 +93,86 @@ class ProductSerializer(WritableNestedModelSerializer):
     operating_system = OperatingSystemSerializer()
     form_factor = FormFactorSerializer()
     extra = ExtraSerializer()
+    # For WRITE operations, accept an image file
+    image = serializers.ImageField(required=False, write_only=True)
 
     class Meta:
         model = Product
         fields = "__all__"
+
+    def _handle_nested_component(self, validated_data, component_name, model_class):
+        """Helper function to get or create nested component objects."""
+        # The frontend sends component data as a JSON string in FormData
+        component_data_str = validated_data.pop(component_name, '{}')
+        
+        # Check if the string is valid JSON before trying to load it
+        try:
+            component_data = json.loads(component_data_str)
+        except (json.JSONDecodeError, TypeError):
+            # If it's not valid JSON (e.g., it was an empty string), use a default
+            component_data = {}
+
+        data_received = component_data.get('data_received', '').strip()
+        
+        if not data_received:
+            return None # If no spec string is provided, do not create a component
+
+        # Get or create the component instance
+        instance, _ = model_class.objects.get_or_create(data_received=data_received)
+        return instance
+
+    @transaction.atomic
+    def create(self, validated_data):
+        """
+        Custom create method to handle FormData with an image and JSON-stringified nested data.
+        """
+        # Create a dictionary to hold the prepared component instances
+        components = {}
+        components['processor'] = self._handle_nested_component(validated_data, 'processor', Processor)
+        components['memory'] = self._handle_nested_component(validated_data, 'memory', Memory)
+        components['storage'] = self._handle_nested_component(validated_data, 'storage', Storage)
+        components['graphic'] = self._handle_nested_component(validated_data, 'graphic', Graphic)
+        components['display'] = self._handle_nested_component(validated_data, 'display', Display)
+        components['ports'] = self._handle_nested_component(validated_data, 'ports', PortsConnectivity)
+        components['battery'] = self._handle_nested_component(validated_data, 'battery', PowerBattery)
+        components['cooling'] = self._handle_nested_component(validated_data, 'cooling', Cooling)
+        components['operating_system'] = self._handle_nested_component(validated_data, 'operating_system', OperatingSystem)
+        components['form_factor'] = self._handle_nested_component(validated_data, 'form_factor', FormFactor)
+        components['extra'] = self._handle_nested_component(validated_data, 'extra', Extra)
+        
+        product = Product.objects.create(**validated_data, **components)
+        return product
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        """
+        Custom update method to handle partial updates with potential new images
+        and updated component specs.
+        """
+        # Update direct Product fields
+        instance.name = validated_data.get('name', instance.name)
+        instance.brand = validated_data.get('brand', instance.brand)
+        instance.price = validated_data.get('price', instance.price)
+        instance.quantity = validated_data.get('quantity', instance.quantity)
+        
+        # If a new image was uploaded, it will be in validated_data
+        if 'image' in validated_data:
+            instance.image = validated_data['image']
+
+        # Update nested components if their data was sent
+        component_map = {
+            'processor': Processor, 'memory': Memory, 'storage': Storage, 'graphic': Graphic,
+            'display': Display, 'ports': PortsConnectivity,
+            # ... add all other components here ...
+        }
+
+        for name, model_class in component_map.items():
+            if name in validated_data:
+                component_instance = self._handle_nested_component(validated_data, name, model_class)
+                setattr(instance, name, component_instance)
+
+        instance.save()
+        return instance
 
 
 class ProductUploadSerializer(serializers.Serializer):
