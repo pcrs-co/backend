@@ -1,3 +1,4 @@
+from sympy import Q
 from ..models import CPUBenchmark, GPUBenchmark, DiskBenchmark
 from decimal import Decimal, InvalidOperation
 import pandas as pd
