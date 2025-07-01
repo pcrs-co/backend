@@ -2,11 +2,14 @@ from drf_writable_nested.serializers import WritableNestedModelSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from login_and_register.serializers import VendorSerializer
+from order.models import Order  # <--- ADD THIS IMPORT
 from django.contrib.auth.models import Group
 from login_and_register.models import *
 from rest_framework import serializers
 from django.core.mail import send_mail
+from django.db.models import Count, Q
 from django.db import transaction
+from decimal import Decimal
 from io import BytesIO
 from .models import *
 import pandas as pd
@@ -15,6 +18,7 @@ import string
 import random
 import json
 import re
+import io
 
 
 class ProcessorSerializer(serializers.ModelSerializer):
@@ -106,6 +110,8 @@ class ProductSerializer(
     operating_system = OperatingSystemSerializer(read_only=True)
     form_factor = FormFactorSerializer(read_only=True)
     extra = ExtraSerializer(read_only=True)
+    # +++ ADD THIS NEW FIELD +++
+    vendor_order_summary = serializers.SerializerMethodField()
 
     # For READ operations, display a list of all associated images
     images = ProductImageSerializer(many=True, read_only=True)
@@ -140,8 +146,30 @@ class ProductSerializer(
             "extra",
             "images",
             "uploaded_images",
+            "vendor_order_summary",  # <-- ADD THIS NEW FIELD
         )
         read_only_fields = ("id", "vendor")
+
+    # +++ ADD THIS NEW METHOD +++
+    def get_vendor_order_summary(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+
+        # Check if a user is authenticated and has a vendor profile
+        if not (user and user.is_authenticated and hasattr(user, "vendor")):
+            return None
+
+        # Check if the authenticated vendor is the one who owns this product
+        if user.vendor.id == obj.vendor.id:
+            # If so, aggregate order stats for this product
+            summary = Order.objects.filter(product=obj).aggregate(
+                pending_orders=Count("id", filter=Q(status="pending")),
+                confirmed_orders=Count("id", filter=Q(status="confirmed")),
+            )
+            return summary
+
+        # If the user is a vendor but not the owner, return nothing
+        return None
 
     def _handle_nested_component(self, validated_data, component_name_str, model_class):
         component_data_str = validated_data.pop(component_name_str, "{}")
@@ -192,6 +220,11 @@ class ProductSerializer(
 
 # --- FULLY REBUILT: ProductUploadSerializer ---
 class ProductUploadSerializer(serializers.Serializer):
+    """
+    Handles bulk-creating products from a spreadsheet and a single zip file of images.
+    This serializer is robust against missing data and uses efficient bulk operations.
+    """
+
     file = serializers.FileField(
         write_only=True, help_text="The spreadsheet (.csv, .xls, .xlsx)."
     )
@@ -202,7 +235,9 @@ class ProductUploadSerializer(serializers.Serializer):
     def validate_file(self, value):
         supported_extensions = [".csv", ".xls", ".xlsx"]
         if not any(value.name.lower().endswith(ext) for ext in supported_extensions):
-            raise serializers.ValidationError("Unsupported spreadsheet format.")
+            raise serializers.ValidationError(
+                "Unsupported spreadsheet format. Use .csv, .xls, or .xlsx."
+            )
         return value
 
     def validate_image_zip(self, value):
@@ -212,10 +247,16 @@ class ProductUploadSerializer(serializers.Serializer):
 
     @transaction.atomic
     def save(self, **kwargs):
-        vendor = kwargs["vendor"]
+        vendor = kwargs.get("vendor")
+        if not vendor:
+            raise serializers.ValidationError(
+                "A vendor must be provided to save products."
+            )
+
         spreadsheet_file = self.validated_data["file"]
         zip_file = self.validated_data.get("image_zip")
 
+        # 1. UNZIP IMAGES INTO IN-MEMORY MAP
         image_map = {}
         if zip_file:
             try:
@@ -223,6 +264,7 @@ class ProductUploadSerializer(serializers.Serializer):
                     for filename in zf.namelist():
                         if filename.startswith("__MACOSX/") or filename.endswith("/"):
                             continue
+
                         image_data = zf.read(filename)
                         in_memory_file = InMemoryUploadedFile(
                             io.BytesIO(image_data),
@@ -239,18 +281,18 @@ class ProductUploadSerializer(serializers.Serializer):
                     "The uploaded image file is not a valid zip archive."
                 )
 
+        # 2. READ SPREADSHEET
         try:
-            df = (
-                pd.read_excel(spreadsheet_file)
-                if not spreadsheet_file.name.lower().endswith(".csv")
-                else pd.read_csv(spreadsheet_file)
-            )
-            df.fillna("", inplace=True)
+            if spreadsheet_file.name.lower().endswith(".csv"):
+                df = pd.read_csv(spreadsheet_file)
+            else:
+                df = pd.read_excel(spreadsheet_file)
+
+            df = df.astype(str).fillna("")  # Prevents FutureWarning and dtype issues
         except Exception as e:
             raise serializers.ValidationError(f"Could not read the spreadsheet: {e}")
 
-        products_to_create = []
-        product_image_relations = {}
+        # 3. SETUP
         component_cache = {}
         component_map = {
             "processor": (Processor, "processor"),
@@ -261,15 +303,18 @@ class ProductUploadSerializer(serializers.Serializer):
             "ports": (PortsConnectivity, "ports"),
             "battery": (PowerBattery, "battery"),
             "cooling": (Cooling, "cooling"),
-            "os": (OperatingSystem, "os"),
+            "os": (OperatingSystem, "operating_system"),
             "formfactor": (FormFactor, "form_factor"),
             "extra": (Extra, "extra"),
         }
 
         if "image" not in df.columns:
             df["image"] = ""
-        df["image"] = df["image"].astype(str)
 
+        created_count = 0
+        images_to_create = []
+
+        # 4. PROCESS EACH ROW AND CREATE PRODUCT & PREPARE IMAGES
         for index, row in df.iterrows():
             try:
                 product_components = {}
@@ -287,54 +332,56 @@ class ProductUploadSerializer(serializers.Serializer):
                         component_cache[cache_key] = component_instance
                     product_components[field_name] = component_instance
 
-                product_instance = Product(
-                    name=row.get("product_name", f"Unnamed Product {index+1}"),
-                    price=pd.to_numeric(row.get("price"), errors="coerce") or 0.0,
-                    brand=row.get("brand", "Unknown Brand"),
-                    product_type=row.get("product_type", "uncategorized"),
+                price_val = pd.to_numeric(row.get("price"), errors="coerce")
+                final_price = (
+                    Decimal("0.00") if pd.isna(price_val) else Decimal(price_val)
+                )
+
+                # CREATE PRODUCT INDIVIDUALLY TO GUARANTEE IT HAS AN ID
+                product_instance = Product.objects.create(
+                    name=str(
+                        row.get("product_name", f"Unnamed Product {index+1}")
+                    ).strip(),
+                    price=final_price,
+                    brand=str(row.get("brand", "Unknown Brand")).strip(),
+                    product_type=str(row.get("product_type", "uncategorized")).strip(),
                     vendor=vendor,
                     **product_components,
                 )
-                products_to_create.append(product_instance)
+                created_count += 1
 
+                # PREPARE IMAGES FOR BULK CREATION LATER
                 image_filenames_str = row.get("image", "")
-                if image_filenames_str:
-                    filenames = [
-                        name.strip() for name in image_filenames_str.split(",")
-                    ]
-                    product_image_relations[product_instance] = filenames
-            except Exception as e:
-                print(f"Skipping row {index + 2} due to error: {e}")
-                continue
-
-        if not products_to_create:
-            raise serializers.ValidationError(
-                "No valid product rows found in the file."
-            )
-
-        created_products = Product.objects.bulk_create(
-            products_to_create, batch_size=500
-        )
-
-        images_to_create = []
-        for i, product_instance in enumerate(products_to_create):
-            db_product = created_products[i]
-            if product_instance in product_image_relations:
-                filenames = product_image_relations[product_instance]
+                filenames = [
+                    name.strip()
+                    for name in image_filenames_str.split(",")
+                    if name.strip()
+                ]
                 for filename in filenames:
                     if filename in image_map:
                         image_file = image_map[filename]
                         images_to_create.append(
                             ProductImage(
-                                product=db_product,
+                                product_id=product_instance.id,  # Now product_instance.id is guaranteed to exist
                                 image=image_file,
-                                alt_text=f"{db_product.name} - {filename}",
+                                alt_text=f"{product_instance.name} - {filename}",
                             )
                         )
+
+            except Exception as e:
+                print(f"Skipping spreadsheet row {index + 2} due to error: {e}")
+                continue
+
+        # 5. BULK CREATE ALL IMAGES AT ONCE
         if images_to_create:
             ProductImage.objects.bulk_create(images_to_create, batch_size=500)
 
-        return len(created_products)
+        if created_count == 0:
+            raise serializers.ValidationError(
+                "No valid product rows were found in the file."
+            )
+
+        return created_count
 
 
 # --- UPDATED: ProductRecommendationSerializer ---

@@ -129,7 +129,7 @@ class Product(models.Model):
 # --- ADD THIS NEW MODEL ---
 def get_product_image_path(instance, filename):
     """Helper function to create a clean upload path for product images."""
-    return f"products/{instance.product.id}/{filename}"
+    return f"products/{instance.product_id}/{filename}"
 
 
 class ProductImage(models.Model):

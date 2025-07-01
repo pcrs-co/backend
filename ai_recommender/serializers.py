@@ -204,30 +204,37 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """
-        Custom create logic to handle activities.
-        This now ONLY creates the preference object and links activities.
-        The AI enrichment is handled by the view that calls this serializer.
+        Custom logic to handle UserPreference creation.
+        - For LOGGED-IN USERS: Always creates a new preference to build a history.
+        - For ANONYMOUS USERS: Uses update_or_create to reuse the same session preference.
         """
-        # 1. Get the current user from the request context.
         user = self.context["request"].user
-
-        # 2. Extract activity names from the validated data.
         primary_activity_name = validated_data.pop("primary_activity")
         secondary_activity_names = validated_data.pop("secondary_activities", [])
 
-        # 3. Create the core UserPreference object.
-        preference_data = {**validated_data}
         if user.is_authenticated:
-            preference_data["user"] = user
-            preference_data.pop("session_id", None)
+            # --- LOGIC FOR LOGGED-IN USERS ---
+            # Always create a new preference record.
+            preference = UserPreference.objects.create(
+                user=user, budget=validated_data.get("budget")
+            )
         else:
-            preference_data["session_id"] = validated_data.get(
-                "session_id", uuid.uuid4()
+            # --- LOGIC FOR ANONYMOUS USERS ---
+            # Reuse the preference for the same session ID.
+            lookup_params = {
+                "session_id": validated_data.get("session_id", uuid.uuid4())
+            }
+            defaults = {"budget": validated_data.get("budget")}
+
+            preference, created = UserPreference.objects.update_or_create(
+                **lookup_params, defaults=defaults
             )
 
-        preference = UserPreference.objects.create(**preference_data)
+        # Activity linking logic is the same for both cases.
+        # Clear any old activities (important for anonymous users reusing a session)
+        # and link the newly submitted ones.
+        preference.activities.clear()
 
-        # 4. Process all activities, get or create them, and link to the preference.
         all_activity_names = [primary_activity_name] + secondary_activity_names
         for activity_name in all_activity_names:
             clean_name = activity_name.strip()
@@ -237,12 +244,7 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
                 )
                 preference.activities.add(activity)
 
-        # --- FIX: REMOVE THE REDUNDANT BACKGROUND TASK ---
-        # enrich_user_preference_task.delay(
-        #     preference.id
-        # )
-
-        return preference  # Return the created preference object
+        return preference
 
 
 # +++ UPGRADED RecommendationSpecificationSerializer +++
@@ -297,3 +299,25 @@ class SuggestionSerializer(serializers.Serializer):
 
     class Meta:
         fields = ["activities"]
+
+
+class UserRecommendationHistorySerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer for a user's recommendation history list.
+    """
+
+    # We can add a field to show what activities led to this spec
+    activities = serializers.StringRelatedField(
+        many=True, source="source_preference.activities"
+    )
+
+    class Meta:
+        model = RecommendationSpecification
+        fields = [
+            "id",
+            "created_at",
+            "recommended_cpu_name",
+            "recommended_gpu_name",
+            "recommended_ram",
+            "activities",
+        ]

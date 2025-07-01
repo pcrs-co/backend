@@ -12,7 +12,6 @@ from .serializers import *
 from .models import *
 
 
-# --- UPDATED: VendorProductViewSet ---
 class VendorProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ProductSerializer
@@ -20,29 +19,27 @@ class VendorProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if hasattr(user, "vendor_profile"):  # Make sure this matches your user model
-            return Product.objects.filter(vendor=user.vendor_profile).order_by(
-                "-created_at"
-            )
+        if hasattr(user, "vendor"):
+            return Product.objects.filter(vendor=user.vendor).order_by("-created_at")
         return Product.objects.none()
 
     def perform_create(self, serializer):
-        if hasattr(self.request.user, "vendor_profile"):
-            serializer.save(vendor=self.request.user.vendor_profile)
+        if hasattr(self.request.user, "vendor"):
+            serializer.save(vendor=self.request.user.vendor)
         else:
             raise PermissionDenied("You do not have a vendor profile.")
 
-    @action(detail=False, methods=["post"])
+    @action(detail=False, methods=["post"], url_path="upload")
     def upload(self, request, *args, **kwargs):
-        if not hasattr(request.user, "vendor_profile"):
+        user = self.request.user
+        if not hasattr(user, "vendor"):
             return Response(
-                {"error": "User is not a vendor."}, status=status.HTTP_403_FORBIDDEN
+                {"error": "You do not have a vendor profile to perform this action."},
+                status=status.HTTP_403_FORBIDDEN,
             )
-
-        # The serializer now expects 'file' and 'image_zip'
         serializer = ProductUploadSerializer(data=request.data)
         if serializer.is_valid():
-            num_created = serializer.save(vendor=request.user.vendor_profile)
+            num_created = serializer.save(vendor=user.vendor)
             return Response(
                 {"message": f"Successfully created {num_created} products."},
                 status=status.HTTP_201_CREATED,
@@ -50,25 +47,29 @@ class VendorProductViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# --- UPDATED: AdminProductViewSet ---
 class AdminProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminUser]  # Best practice to lock this down
+    permission_classes = [IsAdminUser]
     serializer_class = ProductSerializer
     queryset = Product.objects.all().order_by("-created_at")
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
-        # ... (Your get_queryset logic is fine) ...
         queryset = super().get_queryset()
         vendor_id = self.request.query_params.get("vendor_id")
         if vendor_id:
             queryset = queryset.filter(vendor__id=vendor_id)
         return queryset
 
-    # The single-product create/update methods should work fine with the updated ProductSerializer
-
-    @action(detail=False, methods=["post"], url_path="upload/(?P<vendor_id>[^/.]+)")
-    def upload_products(self, request, vendor_id=None, *args, **kwargs):
+    # --- FIX: Standardize the custom action ---
+    @action(detail=False, methods=["post"], url_path="upload")
+    def upload(self, request, *args, **kwargs):
+        # We will get the vendor_id from the form data, not the URL.
+        vendor_id = request.data.get("vendor_id")
+        if not vendor_id:
+            return Response(
+                {"error": "vendor_id is a required field."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             vendor = Vendor.objects.get(id=vendor_id)
         except Vendor.DoesNotExist:
@@ -76,13 +77,45 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 {"error": "Vendor not found"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        # We pass the full request data to the serializer
         serializer = ProductUploadSerializer(data=request.data)
         if serializer.is_valid():
             num_created = serializer.save(vendor=vendor)
             return Response(
                 {
-                    "message": f"Successfully created {num_created} products for vendor {vendor.name}."
+                    "message": f"Successfully created {num_created} products for vendor {vendor.company_name}."
                 },
                 status=status.HTTP_201_CREATED,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# +++ ADD THIS NEW VIEW AT THE END OF THE FILE +++
+class PublicProductDetailView(generics.RetrieveAPIView):
+    """
+    A public endpoint to view the full details of a single product.
+    It uses the main ProductSerializer, which will conditionally add
+    vendor-specific data if the requester is the owner.
+    """
+
+    queryset = (
+        Product.objects.select_related(
+            "vendor",
+            "processor",
+            "memory",
+            "storage",
+            "graphic",
+            "display",
+            "ports",
+            "battery",
+            "cooling",
+            "operating_system",
+            "form_factor",
+            "extra",
+        )
+        .prefetch_related("images")
+        .all()
+    )
+    serializer_class = ProductSerializer
+    permission_classes = [AllowAny]
+    lookup_field = "id"  # The URL will use the product ID

@@ -9,6 +9,7 @@ class OrderSerializer(serializers.ModelSerializer):
         required=False,
         help_text="Send 'confirm' or 'cancel' to change order status.",
     )
+    product_name = serializers.StringRelatedField(source="product")
 
     class Meta:
         model = Order
@@ -18,12 +19,20 @@ class OrderSerializer(serializers.ModelSerializer):
             "vendor",
             "product",
             "quantity",
+            "product_name",
             "status",
             "created_at",
             "modified_at",
             "action",
         ]
-        read_only_fields = ["status", "user", "vendor", "created_at", "modified_at"]
+        read_only_fields = [
+            "status",
+            "user",
+            "vendor",
+            "created_at",
+            "modified_at",
+            "product_name",
+        ]
 
     def create(self, validated_data):
         # --- CHANGE START ---
@@ -64,3 +73,16 @@ class OrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"detail": str(e)})
 
         return instance
+
+
+class UserOrderHistorySerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer for a user's order history list.
+    Includes the product name for easy display.
+    """
+
+    product_name = serializers.CharField(source="product.name", read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ["id", "product_name", "quantity", "status", "created_at"]

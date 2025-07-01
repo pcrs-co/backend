@@ -1,4 +1,5 @@
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from .tasks import send_order_notifications_task
 from login_and_register.models import CustomUser, Vendor
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
@@ -19,8 +20,12 @@ class OrderCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        # Associate the order with the logged-in user.
-        serializer.save(user=self.request.user)
+        # The serializer's create method handles the transaction and stock check
+        order = serializer.save(user=self.request.user)
+
+        # --- FIX: Trigger the notification task ---
+        # We call .delay() to run it asynchronously in the background
+        send_order_notifications_task.delay(order.id)
 
 
 class OrderListView(generics.ListAPIView):

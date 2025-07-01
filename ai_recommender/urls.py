@@ -21,6 +21,11 @@ urlpatterns = [
     ),
     path("recommend_product/", ProductRecommendationView.as_view(), name="recommend"),
     path(
+        "history/recommendations/",
+        UserHistoryView.as_view(),
+        name="user-recommendation-history",
+    ),
+    path(
         "recommend/latest/",
         LatestRecommendationView.as_view(),
         name="latest-recommendation",

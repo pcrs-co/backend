@@ -1,4 +1,5 @@
 # ai_recommender/views.py
+from decimal import Decimal, InvalidOperation
 from rest_framework import status, viewsets, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -168,17 +169,53 @@ class ProductRecommendationView(APIView):
                 {"error": "No recommendation found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        # --- FIX: Updated filtering for nested models ---
+        # --- NEW LOGIC: Determine which spec level to use ---
+        spec_level = request.query_params.get("spec_level", "recommended").lower()
+
+        if spec_level == "minimum":
+            target_cpu_score = rec_spec.min_cpu_score
+            target_gpu_score = rec_spec.min_gpu_score
+            target_ram = rec_spec.min_ram
+            target_storage = rec_spec.min_storage_size
+        else:  # Default to recommended
+            target_cpu_score = rec_spec.recommended_cpu_score
+            target_gpu_score = rec_spec.recommended_gpu_score
+            target_ram = rec_spec.recommended_ram
+            target_storage = rec_spec.recommended_storage_size
+
+        # Check if the chosen spec level has data
+        if not target_cpu_score:
+            return Response(
+                {
+                    "error": f"No '{spec_level}' specification data available to find products."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # --- Build the product query ---
         products = Product.objects.filter(
-            processor__cpu_score__gte=rec_spec.recommended_cpu_score,
-            graphic__gpu_score__gte=rec_spec.recommended_gpu_score,
-            memory__capacity_gb__gte=rec_spec.recommended_ram,
-            storage__capacity_gb__gte=rec_spec.recommended_storage_size,
-        ).order_by("price")
+            cpu_score__gte=target_cpu_score,
+            gpu_score__gte=target_gpu_score,
+            memory__capacity_gb__gte=target_ram,
+            storage__capacity_gb__gte=target_storage,
+        )
+
+        # --- NEW LOGIC: Apply optional budget filter ---
+        max_price_str = request.query_params.get("max_price")
+        if max_price_str:
+            try:
+                max_price = Decimal(max_price_str)
+                if max_price > 0:
+                    products = products.filter(price__lte=max_price)
+            except (InvalidOperation, ValueError):
+                # Silently ignore invalid budget values
+                pass
+
+        # Order by price and continue with pagination
+        products = products.order_by("price")
 
         paginator = PageNumberPagination()
         paginated_products = paginator.paginate_queryset(products, request)
-        # Use the updated serializer which now includes images
         serializer = ProductRecommendationSerializer(paginated_products, many=True)
         return paginator.get_paginated_response(serializer.data)
 
@@ -243,3 +280,20 @@ class LatestRecommendationView(APIView):
 
         serializer = RecommendationSpecificationSerializer(latest_spec)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# Add at the end of ai_recommender/views.py
+
+
+class UserHistoryView(generics.ListAPIView):
+    """
+    Returns the recommendation history for the currently authenticated user.
+    """
+
+    serializer_class = UserRecommendationHistorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return RecommendationSpecification.objects.filter(
+            user=self.request.user
+        ).order_by("-created_at")
