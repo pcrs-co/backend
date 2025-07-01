@@ -139,31 +139,24 @@ class RecommendView(APIView):
         return Response(result_serializer.data, status=status.HTTP_200_OK)
 
 
+# --- UPDATED: ProductRecommendationView ---
 class ProductRecommendationView(APIView):
-    """
-    Finds and returns a paginated list of products that meet or exceed
-    the user's generated recommended specifications.
-    """
-
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
+        # ... (Your logic to get rec_spec is correct) ...
         user = request.user if request.user.is_authenticated else None
         session_id = request.query_params.get("session_id")
-
         if not user and not session_id:
             return Response(
                 {"error": "User or session_id is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Build the filter based on whether a user is logged in or anonymous
         spec_filter = (
             {"user": user}
             if user and user.is_authenticated
             else {"session_id": session_id}
         )
-
         rec_spec = (
             RecommendationSpecification.objects.filter(**spec_filter)
             .order_by("-created_at")
@@ -172,29 +165,21 @@ class ProductRecommendationView(APIView):
 
         if not rec_spec or not rec_spec.recommended_cpu_score:
             return Response(
-                {
-                    "error": "No recommendation specification found for this user/session. Please generate specs first."
-                },
-                status=status.HTTP_404_NOT_FOUND,
+                {"error": "No recommendation found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        # Filter products that meet or exceed the *recommended* specs for the best experience.
+        # --- FIX: Updated filtering for nested models ---
         products = Product.objects.filter(
-            cpu_score__gte=rec_spec.recommended_cpu_score,
-            gpu_score__gte=rec_spec.recommended_gpu_score,
-            # We can use the 'memory' related name from the Product model
+            processor__cpu_score__gte=rec_spec.recommended_cpu_score,
+            graphic__gpu_score__gte=rec_spec.recommended_gpu_score,
             memory__capacity_gb__gte=rec_spec.recommended_ram,
-            # And the 'storage' related name
             storage__capacity_gb__gte=rec_spec.recommended_storage_size,
-        ).order_by(
-            "price"
-        )  # Order by price to show the most affordable options first
+        ).order_by("price")
 
-        # Paginate the response
         paginator = PageNumberPagination()
         paginated_products = paginator.paginate_queryset(products, request)
+        # Use the updated serializer which now includes images
         serializer = ProductRecommendationSerializer(paginated_products, many=True)
-
         return paginator.get_paginated_response(serializer.data)
 
 
@@ -224,31 +209,36 @@ class LatestRecommendationView(APIView):
     Fetches the most recent RecommendationSpecification for the current user
     or session_id, allowing the results page to be reloaded.
     """
+
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
         user = request.user if request.user.is_authenticated else None
-        session_id = request.query_params.get('session_id')
+        session_id = request.query_params.get("session_id")
 
         if not user and not session_id:
             return Response(
                 {"detail": "User or session ID must be provided."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         spec_filter = {}
         if user:
-            spec_filter['user'] = user
+            spec_filter["user"] = user
         else:
-            spec_filter['session_id'] = session_id
+            spec_filter["session_id"] = session_id
 
         # Find the most recently created recommendation that matches
-        latest_spec = RecommendationSpecification.objects.filter(**spec_filter).order_by('-created_at').first()
+        latest_spec = (
+            RecommendationSpecification.objects.filter(**spec_filter)
+            .order_by("-created_at")
+            .first()
+        )
 
         if not latest_spec:
             return Response(
                 {"detail": "No recommendations found for this session."},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         serializer = RecommendationSpecificationSerializer(latest_spec)

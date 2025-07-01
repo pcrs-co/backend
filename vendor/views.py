@@ -1,5 +1,5 @@
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import api_view, action
@@ -12,125 +12,63 @@ from .serializers import *
 from .models import *
 
 
+# --- UPDATED: VendorProductViewSet ---
 class VendorProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ProductSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    # The global paginator will be applied automatically to the list view.
-
     def get_queryset(self):
-        """This view should only return products for the currently authenticated vendor."""
         user = self.request.user
-        if hasattr(user, "vendor"):
-            return Product.objects.filter(vendor=user.vendor).order_by("-created_at")
+        if hasattr(user, "vendor_profile"):  # Make sure this matches your user model
+            return Product.objects.filter(vendor=user.vendor_profile).order_by(
+                "-created_at"
+            )
         return Product.objects.none()
 
     def perform_create(self, serializer):
-        """Automatically associate the new product with the logged-in vendor."""
-        if hasattr(self.request.user, "vendor"):
-            serializer.save(vendor=self.request.user.vendor)
+        if hasattr(self.request.user, "vendor_profile"):
+            serializer.save(vendor=self.request.user.vendor_profile)
         else:
-            raise PermissionDenied(
-                "You do not have a vendor profile to create products."
-            )
+            raise PermissionDenied("You do not have a vendor profile.")
 
-    @action(detail=False, methods=["post"], url_path="upload")
-    def upload_products(self, request, *args, **kwargs):
-        """Handles product file upload for the authenticated vendor."""
-        user = self.request.user
-        if not hasattr(user, "vendor"):
+    @action(detail=False, methods=["post"])
+    def upload(self, request, *args, **kwargs):
+        if not hasattr(request.user, "vendor_profile"):
             return Response(
                 {"error": "User is not a vendor."}, status=status.HTTP_403_FORBIDDEN
             )
 
-        file = request.FILES.get("file")
-        if not file:
+        # The serializer now expects 'file' and 'image_zip'
+        serializer = ProductUploadSerializer(data=request.data)
+        if serializer.is_valid():
+            num_created = serializer.save(vendor=request.user.vendor_profile)
             return Response(
-                {"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST
+                {"message": f"Successfully created {num_created} products."},
+                status=status.HTTP_201_CREATED,
             )
-
-        serializer = ProductUploadSerializer(data={"file": file})
-        serializer.is_valid(raise_exception=True)
-        serializer.save(vendor=user.vendor)
-        return Response(
-            {"message": "Products uploaded successfully"},
-            status=status.HTTP_201_CREATED,
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# --- UPDATED: AdminProductViewSet ---
 class AdminProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [
-        IsAuthenticated
-    ]  # Should be [IsAdminUser] for better security
+    permission_classes = [IsAdminUser]  # Best practice to lock this down
     serializer_class = ProductSerializer
     queryset = Product.objects.all().order_by("-created_at")
-    # The global paginator will be applied automatically.
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
-        """
-        Admins can filter products by a specific vendor using a query parameter.
-        e.g., /api/admin/products/?vendor_id=123
-        """
+        # ... (Your get_queryset logic is fine) ...
         queryset = super().get_queryset()
         vendor_id = self.request.query_params.get("vendor_id")
         if vendor_id:
-            # Use __id for clarity, though just 'vendor' works too
             queryset = queryset.filter(vendor__id=vendor_id)
         return queryset
 
-    def create(self, request, *args, **kwargs):
-        data = request.data.copy()
-        vendor_id = data.get("vendor")
-
-        try:
-            vendor = (
-                Vendor.objects.get(id=vendor_id)
-                if vendor_id
-                else request.user.vendor_profile
-            )
-            data["vendor"] = vendor.id
-        except (Vendor.DoesNotExist, AttributeError):
-            return Response(
-                {"error": "Vendor not found"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer = self.get_serializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        product = serializer.save()
-        return Response(
-            {"message": "Product created successfully", "product": serializer.data},
-            status=status.HTTP_201_CREATED,
-        )
-
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        data = request.data.copy()
-        vendor_id = data.get("vendor")
-
-        if vendor_id:
-            try:
-                vendor = Vendor.objects.get(id=vendor_id)
-                data["vendor"] = vendor.id
-            except Vendor.DoesNotExist:
-                return Response(
-                    {"error": "Vendor not found"}, status=status.HTTP_400_BAD_REQUEST
-                )
-
-        serializer = self.get_serializer(instance, data=data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        product = serializer.save()
-        return Response(
-            {"message": "Product updated successfully", "product": serializer.data}
-        )
+    # The single-product create/update methods should work fine with the updated ProductSerializer
 
     @action(detail=False, methods=["post"], url_path="upload/(?P<vendor_id>[^/.]+)")
-    def upload_products(self, request, vendor_id=None):
-        if "file" not in request.FILES:
-            return Response(
-                {"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
+    def upload_products(self, request, vendor_id=None, *args, **kwargs):
         try:
             vendor = Vendor.objects.get(id=vendor_id)
         except Vendor.DoesNotExist:
@@ -138,24 +76,13 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 {"error": "Vendor not found"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        file = request.FILES["file"]
-        serializer = ProductUploadSerializer(data={"file": file})
-
+        serializer = ProductUploadSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(vendor_id=vendor.id)
+            num_created = serializer.save(vendor=vendor)
             return Response(
                 {
-                    "message": "Products uploaded successfully",
-                    "count": (
-                        serializer.instance.count()
-                        if hasattr(serializer, "instance")
-                        else 0
-                    ),
+                    "message": f"Successfully created {num_created} products for vendor {vendor.name}."
                 },
                 status=status.HTTP_201_CREATED,
             )
-
-        return Response(
-            {"error": "Upload failed", "details": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

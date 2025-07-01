@@ -11,7 +11,6 @@ class Product(models.Model):
 
     name = models.CharField(max_length=255)
     brand = models.CharField(max_length=255)
-    image = models.ImageField(upload_to='product_images/', null=True, blank=True)
     product_type = models.CharField(max_length=50, choices=VENDOR_TYPES)
     price = models.DecimalField(max_digits=65, decimal_places=2, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
@@ -125,6 +124,33 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# --- ADD THIS NEW MODEL ---
+def get_product_image_path(instance, filename):
+    """Helper function to create a clean upload path for product images."""
+    return f"products/{instance.product.id}/{filename}"
+
+
+class ProductImage(models.Model):
+    """
+    Stores a single image for a Product. A Product can have many ProductImages.
+    """
+
+    product = models.ForeignKey(
+        Product, related_name="images", on_delete=models.CASCADE
+    )
+    image = models.ImageField(upload_to=get_product_image_path)
+    alt_text = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="A short description of the image for accessibility.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    modified_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Image for {self.product.name}"
 
 
 class Processor(models.Model):
