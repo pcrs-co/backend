@@ -1,11 +1,13 @@
 # ai_recommender/logic/utils.py
 
+from sentence_transformers import util
+import json
 import pandas as pd
 import re
 import difflib
 from decimal import Decimal, InvalidOperation
 from django.db.models import Q  # This import is only needed here
-from ..models import Activity, CPUBenchmark, GPUBenchmark, DiskBenchmark
+import numpy as np
 
 
 def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
@@ -193,7 +195,7 @@ def get_sentence_model():
     return _model
 
 
-def _find_match_with_embeddings(requirement_str: str, benchmark_model):
+def _find_match_with_embeddings(requirement_str: str, benchmark_model_class):
     """
     (HELPER) Finds the best benchmark OBJECT for a single requirement string
     using pre-computed vector embeddings.
@@ -203,36 +205,42 @@ def _find_match_with_embeddings(requirement_str: str, benchmark_model):
 
     model = get_sentence_model()
 
-    # 1. Get all pre-computed embeddings from the database for the given model type
+    # 1. Get all pre-computed embeddings from the database
     benchmarks_with_embeddings = list(
-        benchmark_model.objects.exclude(embedding__isnull=True)
+        benchmark_model_class.objects.exclude(embedding__isnull=True)
     )
     if not benchmarks_with_embeddings:
         print(
-            f"WARNING: No pre-computed embeddings found for {benchmark_model.__name__}. Matching will fail."
+            f"WARNING: No pre-computed embeddings found for {benchmark_model_class.__name__}. Matching will fail."
         )
         return None
 
+    # --- FIX: Ensure a consistent data type (float32) for all embeddings ---
     corpus_embeddings = np.array(
-        [json.loads(b.embedding) for b in benchmarks_with_embeddings]
+        [json.loads(b.embedding) for b in benchmarks_with_embeddings],
+        dtype=np.float32,  # Enforce float32
     )
 
     # 2. Create an embedding for the new requirement string
-    query_embedding = model.encode(requirement_str)
+    query_embedding = model.encode(requirement_str, convert_to_tensor=False).astype(
+        np.float32
+    )  # Enforce float32
 
-    # 3. Compute cosine similarities between the query and all database items
-    # This is extremely fast with numpy/pytorch
+    # 3. Compute cosine similarities
     cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
 
     # 4. Find the index of the highest score
     best_match_index = np.argmax(cos_scores)
 
-    # Check if the match is good enough
-    SIMILARITY_THRESHOLD = 0.5  # You can tune this
+    # 5. Check if the match is good enough
+    SIMILARITY_THRESHOLD = 0.5
     if cos_scores[best_match_index] < SIMILARITY_THRESHOLD:
+        print(
+            f"  -> Match found, but score {cos_scores[best_match_index]:.2f} is below threshold {SIMILARITY_THRESHOLD}."
+        )
         return None
 
-    # 5. Return the corresponding benchmark object
+    # 6. Return the corresponding benchmark object
     return benchmarks_with_embeddings[best_match_index]
 
 
@@ -242,6 +250,8 @@ def find_best_benchmark_object(raw_name: str, component_type: str):
     Takes a raw string from the AI (e.g., "Intel i7-9700K or AMD Ryzen 7 2700X")
     and finds the single best matching benchmark OBJECT from the database using embeddings.
     """
+    from ..models import CPUBenchmark, GPUBenchmark
+
     if not raw_name or raw_name.lower() in ["none", "not specified", "n/a"]:
         return None
 
@@ -270,6 +280,8 @@ def find_similar_activities(activity_name):
     """
     Utility function to find and print activities similar to a given one.
     """
+    from ..models import Activity
+
     try:
         target_activity = Activity.objects.get(name__iexact=activity_name)
     except Activity.DoesNotExist:

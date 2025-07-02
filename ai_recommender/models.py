@@ -239,6 +239,8 @@ class ApplicationSystemRequirement(models.Model):
         Orchestrates finding scores for CPU and GPU using the new,
         smarter embedding-based matching function.
         """
+        from .logic.utils import find_best_benchmark_object
+
         print(f"--- Analyzing cpu requirement: '{self.cpu}' ---")
         if self.cpu and self.cpu_score is None:
             # Use the new, imported function
