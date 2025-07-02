@@ -1,0 +1,18 @@
+Hello {{ customer.first_name }},
+
+Your order request has been sent to the vendor.
+
+Product: {{ product.name }}
+Quantity: {{ order.quantity }}
+Price per item: TSh {{ product_price|floatformat:2 }}
+Total: TSh {{ total_price|floatformat:2 }}
+
+Vendor Contact Information:
+Company: {{ vendor.company_name }}
+Location: {{ vendor.location }}
+Phone: {{ vendor_phone }}
+
+The vendor will contact you shortly to confirm the order and arrange payment and collection/delivery.
+
+Thank you for using PCRS,
+The PCRS Team

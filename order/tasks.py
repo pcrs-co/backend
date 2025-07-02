@@ -10,75 +10,63 @@ from django.template.loader import render_to_string
 @shared_task
 def send_order_notifications_task(order_id):
     """
-    Sends email notifications to the customer and vendor for a new order.
+    Sends email notifications to the customer and vendor for a new order using Django templates.
     """
     try:
         order = Order.objects.select_related("user", "vendor__user", "product").get(
             id=order_id
         )
     except Order.DoesNotExist:
-        return f"Order with ID {order_id} not found. Cannot send notifications."
+        print(f"Order with ID {order_id} not found. Cannot send notifications.")
+        return
 
-    customer = order.user
-    vendor = order.vendor
-    product = order.product
+    # Prepare a context dictionary for the templates
+    context = {
+        "order": order,
+        "customer": order.user,
+        "vendor": order.vendor,
+        "product": order.product,
+        "product_price": order.product.price,
+        "total_price": order.product.price * order.quantity,
+        "vendor_phone": order.vendor.user.phone_number,
+    }
 
-    # --- Notification to Vendor ---
-    vendor_subject = f"New Order Request for {product.name}!"
-    vendor_message = f"""
-    Hello {vendor.company_name},
+    try:
+        # --- Notification to Vendor ---
+        vendor_subject = f"New Order Request for {order.product.name}!"
+        # Use render_to_string to load the template with the context
+        vendor_message = render_to_string("order/vendor_notification.txt", context)
+        send_mail(
+            vendor_subject,
+            vendor_message,
+            settings.DEFAULT_FROM_EMAIL,
+            [order.vendor.user.email],
+            fail_silently=False,
+        )
+        print(f"Vendor notification sent for Order ID {order_id}.")
 
-    You have received a new order request from customer {customer.first_name} {customer.last_name}.
+        # --- Notification to Customer ---
+        customer_subject = (
+            f"Your Order Request for {order.product.name} has been placed!"
+        )
+        customer_message = render_to_string("order/customer_notification.txt", context)
+        send_mail(
+            customer_subject,
+            customer_message,
+            settings.DEFAULT_FROM_EMAIL,
+            [order.user.email],
+            fail_silently=False,
+        )
+        print(f"Customer notification sent for Order ID {order_id}.")
 
-    Product: {product.name}
-    Quantity: {order.quantity}
-
-    Customer Contact Information:
-    Email: {customer.email}
-    Phone: {customer.phone_number}
-
-    Please log in to your vendor dashboard to review and confirm this order.
-
-    Thank you,
-    The PCRS Team
-    """
-    send_mail(
-        vendor_subject,
-        vendor_message,
-        settings.DEFAULT_FROM_EMAIL,
-        [vendor.user.email],
-        fail_silently=False,
-    )
-
-    # --- Notification to Customer ---
-    customer_subject = f"Your Order Request for {product.name} has been placed!"
-    customer_message = f"""
-    Hello {customer.first_name},
-
-    Your order request has been sent to the vendor.
-
-    Product: {product.name}
-    Quantity: {order.quantity}
-    Price per item: TSh {product.price:,.2f}
-    Total: TSh {(product.price * order.quantity):,.2f}
-
-    Vendor Contact Information:
-    Company: {vendor.company_name}
-    Location: {vendor.location}
-    Phone: {vendor.user.phone_number}
-
-    The vendor will contact you shortly to confirm the order and arrange payment and collection/delivery.
-
-    Thank you for using PCRS,
-    The PCRS Team
-    """
-    send_mail(
-        customer_subject,
-        customer_message,
-        settings.DEFAULT_FROM_EMAIL,
-        [customer.email],
-        fail_silently=False,
-    )
+    except Exception as e:
+        # If sending mail fails, log the error but don't crash the task
+        print(
+            f"CRITICAL: Failed to send email notifications for Order ID {order_id}. Error: {e}"
+        )
+        # Optionally, you can re-raise the exception to have Celery retry the task
+        # raise self.retry(exc=e, countdown=60)
+        return f"Failed to send notifications for Order ID {order_id}."
 
     # --- TODO: SMS Notification Logic ---
     # Here you would integrate with an SMS gateway like Twilio or another provider.

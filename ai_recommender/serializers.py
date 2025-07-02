@@ -9,7 +9,7 @@ import pandas as pd
 import string
 import random
 import re
-from login_and_register.serializers import VendorSerializer
+import uuid
 
 
 class CPUBenchmarkSerializer(serializers.ModelSerializer):
@@ -127,9 +127,6 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
             ),  # Default to empty string
         }
 
-        # Prepare data for the new preference object
-        preference_data = {"budget": validated_data.get("budget")}
-
         if user.is_authenticated:
             preference_data["user"] = user
         else:
@@ -166,9 +163,13 @@ class RecommendationSpecificationSerializer(serializers.ModelSerializer):
     recommended_specs = serializers.SerializerMethodField()
     note = serializers.SerializerMethodField()
 
+    session_id = serializers.CharField(
+        source="source_preference.session_id", read_only=True
+    )
+
     class Meta:
         model = RecommendationSpecification
-        fields = ["note", "minimum_specs", "recommended_specs"]
+        fields = ["session_id", "note", "minimum_specs", "recommended_specs"]
 
     def get_note(self, obj):
         if not obj.recommended_cpu_name:
@@ -209,23 +210,61 @@ class SuggestionSerializer(serializers.Serializer):
         fields = ["activities"]
 
 
+# ai_recommender/serializers.py
+# ... (add this class to the end of the file)
+
+
 class UserRecommendationHistorySerializer(serializers.ModelSerializer):
     """
-    A lightweight serializer for a user's recommendation history list.
+    A serializer for a user's recommendation history list.
+    Crucially, it mimics the structure of RecommendationSpecificationSerializer
+    so the frontend can reuse the Results page component.
     """
 
-    # We can add a field to show what activities led to this spec
-    activities = serializers.StringRelatedField(
-        many=True, source="source_preference.activities"
-    )
+    minimum_specs = serializers.SerializerMethodField()
+    recommended_specs = serializers.SerializerMethodField()
+    note = serializers.SerializerMethodField()
+    # We add the activities that generated this recommendation.
+    # Add a SerializerMethodField for more control
+    activities = serializers.SerializerMethodField()
 
     class Meta:
         model = RecommendationSpecification
         fields = [
             "id",
             "created_at",
-            "recommended_cpu_name",
-            "recommended_gpu_name",
-            "recommended_ram",
-            "activities",
+            "activities",  # Use the new method field
+            "note",
+            "minimum_specs",
+            "recommended_specs",
         ]
+
+    def get_activities(self, obj):
+        if obj.source_preference and hasattr(obj.source_preference, "activities"):
+            return list(obj.source_preference.activities.values_list("name", flat=True))
+        return []  # Return an empty list if the source preference is gone
+
+    def get_note(self, obj):
+        return "This is a past recommendation. The product list below reflects current inventory."
+
+    def get_minimum_specs(self, obj):
+        """Returns the minimum spec set with safe defaults."""
+        return {
+            "type": "minimum",
+            "cpu": obj.min_cpu_name or "N/A",
+            "gpu": obj.min_gpu_name or "N/A",
+            "ram_gb": obj.min_ram or 0,
+            "storage_gb": obj.min_storage_size or 0,
+            "storage_type": obj.min_storage_type or "Any",
+        }
+
+    def get_recommended_specs(self, obj):
+        """Returns the recommended spec set with safe defaults."""
+        return {
+            "type": "recommended",
+            "cpu": obj.recommended_cpu_name or "N/A",
+            "gpu": obj.recommended_gpu_name or "N/A",
+            "ram_gb": obj.recommended_ram or 0,
+            "storage_gb": obj.recommended_storage_size or 0,
+            "storage_type": obj.recommended_storage_type or "Any",
+        }

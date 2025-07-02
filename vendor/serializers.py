@@ -506,13 +506,11 @@ class ProductRecommendationSerializer(serializers.ModelSerializer):
         ]
 
     def get_match_details(self, obj):
-        # Retrieve the recommendation spec from the context we passed in the view
         rec_spec = self.context.get("rec_spec")
         spec_level = self.context.get("spec_level")
         if not rec_spec:
             return None
 
-        # Determine which spec level to compare against
         if spec_level == "minimum":
             target_cpu_score = rec_spec.min_cpu_score or 0
             target_gpu_score = rec_spec.min_gpu_score or 0
@@ -522,12 +520,11 @@ class ProductRecommendationSerializer(serializers.ModelSerializer):
             target_gpu_score = rec_spec.recommended_gpu_score or 0
             target_ram = rec_spec.recommended_ram or 0
 
-        # Get the product's actual specs
-        product_cpu_score = obj.cpu_score or 0
-        product_gpu_score = obj.gpu_score or 0
+        # --- THE FIX: Access scores from the related component models ---
+        product_cpu_score = obj.processor.score if obj.processor else 0
+        product_gpu_score = obj.graphic.score if obj.graphic else 0
         product_ram = obj.memory.capacity_gb if obj.memory else 0
 
-        # --- Logic to generate helpful tags ---
         tags = []
         is_perfect_match = (
             product_cpu_score >= target_cpu_score
@@ -538,13 +535,11 @@ class ProductRecommendationSerializer(serializers.ModelSerializer):
         if is_perfect_match:
             tags.append({"text": "Perfect Match", "type": "success"})
 
-        # Add tags for exceeding specs
-        if product_cpu_score > target_cpu_score * 1.2:  # Exceeds by 20%
+        if product_cpu_score > target_cpu_score * 1.2:
             tags.append({"text": "Better CPU", "type": "info"})
         if product_gpu_score > target_gpu_score * 1.2:
             tags.append({"text": "Better GPU", "type": "info"})
 
-        # Add tags for missing specs (only if not a perfect match)
         if not is_perfect_match:
             if product_cpu_score < target_cpu_score:
                 tags.append({"text": "Weaker CPU", "type": "warning"})
@@ -554,8 +549,8 @@ class ProductRecommendationSerializer(serializers.ModelSerializer):
                 tags.append({"text": "Less RAM", "type": "warning"})
 
         return {
-            "match_score": getattr(
-                obj, "match_score", 0
-            ),  # Get the score we annotated in the view
+            "ranking_score": getattr(
+                obj, "ranking_score", 0  # Use ranking_score from the annotation
+            ),
             "tags": tags,
         }

@@ -11,29 +11,7 @@ from vendor.models import Product
 from .models import Order
 
 
-class OrderCreateView(generics.CreateAPIView):
-    """
-    Handles creating a new order (POST). Replaces the old OrderView post method.
-    """
-
-    serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def perform_create(self, serializer):
-        # The serializer's create method handles the transaction and stock check
-        order = serializer.save(user=self.request.user)
-
-        # --- FIX: Trigger the notification task ---
-        # We call .delay() to run it asynchronously in the background
-        send_order_notifications_task.delay(order.id)
-
-
-class OrderListView(generics.ListAPIView):
-    """
-    Returns a list of orders based on the user's role.
-    This replaces the old APIView and is more standard.
-    """
-
+class OrderListCreateView(generics.ListCreateAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -47,6 +25,14 @@ class OrderListView(generics.ListAPIView):
         else:
             # A customer sees only their own orders.
             return Order.objects.filter(user=user).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        # The serializer's create method handles the transaction and stock check
+        order = serializer.save(user=self.request.user)
+
+        # --- FIX: Trigger the notification task ---
+        # We call .delay() to run it asynchronously in the background
+        send_order_notifications_task.delay(order.id)
 
 
 class OrderDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -70,27 +56,30 @@ class OrderDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Order.objects.filter(user=user)
 
     def perform_update(self, serializer):
-        # --- Pushing for Errors: Add strict permission checks for actions ---
+        # --- THIS IS THE FIX: Add strict permission checks for actions ---
         order = self.get_object()
         action = serializer.validated_data.get("action")
 
         if action == "confirm":
-            # Only the vendor associated with the order can confirm it.
-            if (
+            # Only the vendor associated with the order OR an admin can confirm it.
+            if not self.request.user.is_staff and (
                 not hasattr(self.request.user, "vendor")
                 or self.request.user.vendor != order.vendor
             ):
                 raise permissions.PermissionDenied(
-                    "You are not the vendor for this order."
+                    "You do not have permission to confirm this order."
                 )
 
         elif action == "cancel":
-            # Only the user who placed the order can cancel it.
-            if self.request.user != order.user:
+            # Only the customer who placed the order OR an admin can cancel it.
+            if self.request.user.is_staff:
+                pass  # Admins can do anything
+            elif self.request.user != order.user:
                 raise permissions.PermissionDenied(
                     "You cannot cancel an order you did not place."
                 )
 
+        # If checks pass, save the instance (which calls the .confirm() or .cancel() method)
         serializer.save()
 
     def perform_destroy(self, instance):

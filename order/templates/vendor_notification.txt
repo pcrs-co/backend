@@ -1,0 +1,15 @@
+Hello {{ vendor.company_name }},
+
+You have received a new order request from customer {{ customer.first_name }} {{ customer.last_name }}.
+
+Product: {{ product.name }}
+Quantity: {{ order.quantity }}
+
+Customer Contact Information:
+Email: {{ customer.email }}
+Phone: {{ customer.phone_number }}
+
+Please log in to your vendor dashboard to review and confirm this order.
+
+Thank you,
+The PCRS Team

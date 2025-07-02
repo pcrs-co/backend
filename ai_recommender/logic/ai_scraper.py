@@ -28,8 +28,8 @@ def _ask_gemini(prompt: str) -> str:
     A private helper to query Gemini. Returns an empty string on failure.
     """
     try:
-        print("Attempting to query Gemini model: gemini-1.5-flash-latest...")
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        print("Attempting to query Gemini model: gemini-1.5-pro-latest...")
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")
         generation_config = genai.types.GenerationConfig(
             response_mime_type="application/json", temperature=0.1
         )

@@ -1,23 +1,53 @@
 # ai_recommender/logic/recommendation_engine.py
-from django.db.models import F, Max
+from django.db.models import F, Sum, Value, FloatField, ExpressionWrapper
+from django.db.models.functions import Coalesce
 
 
+# --- CHANGE 1: IMPROVED "HEAVIEST" REQUIREMENT LOGIC ---
+# This new function uses a weighted score to better identify the most demanding application.
 def get_heaviest_requirement(requirements_qs):
     """
     Finds the single most demanding requirement set from a queryset.
-    The "heaviest" is determined by the highest combined CPU and GPU score.
+    The "heaviest" is determined by a weighted score of CPU, GPU, and RAM.
     """
     if not requirements_qs.exists():
         return None
 
-    # Use annotation to find the requirement with the highest combined score
+    # Weights can be tuned. Here, CPU/GPU are considered more impactful than RAM.
+    # We use Coalesce to handle potential null scores gracefully.
     heaviest_req = (
-        requirements_qs.annotate(total_score=F("cpu_score") + F("gpu_score"))
-        .order_by("-total_score")
+        requirements_qs.annotate(
+            weighted_score=ExpressionWrapper(
+                Coalesce(F("cpu_score"), Value(0)) * 1.0
+                + Coalesce(F("gpu_score"), Value(0)) * 1.0
+                + Coalesce(F("ram"), Value(0))
+                * 25.0,  # A simple multiplier to bring RAM into a similar scale as scores
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-weighted_score")
         .first()
     )
 
     return heaviest_req
+
+
+# --- NEW HELPER FUNCTION TO REDUCE REPETITION ---
+def _populate_spec_defaults(spec_level, heaviest_req, total_storage):
+    """Populates a dictionary with spec details for a given level."""
+    if not heaviest_req:
+        return {}
+
+    prefix = "recommended_" if spec_level == "recommended" else "min_"
+    return {
+        f"{prefix}cpu_name": heaviest_req.cpu,
+        f"{prefix}gpu_name": heaviest_req.gpu,
+        f"{prefix}cpu_score": heaviest_req.cpu_score,
+        f"{prefix}gpu_score": heaviest_req.gpu_score,
+        f"{prefix}ram": heaviest_req.ram,
+        f"{prefix}storage_size": total_storage,  # Use the aggregated total storage
+        f"{prefix}storage_type": heaviest_req.storage_type,  # Still use the heaviest app's storage *type* (e.g., SSD)
+    }
 
 
 def generate_recommendation(user=None, session_id=None):
@@ -38,7 +68,7 @@ def generate_recommendation(user=None, session_id=None):
     elif session_id:
         pref_filter["session_id"] = session_id
     else:
-        return None  # Cannot proceed without a user or session
+        return None
 
     pref = UserPreference.objects.filter(**pref_filter).order_by("-created_at").first()
 
@@ -58,44 +88,35 @@ def generate_recommendation(user=None, session_id=None):
         application__in=apps, type="recommended"
     )
 
+    # --- CHANGE 2: SUM THE STORAGE REQUIREMENTS ---
+    # We aggregate the storage size across all "recommended" requirements.
+    total_recommended_storage = (
+        rec_reqs_qs.aggregate(total_storage=Sum("storage_size"))["total_storage"] or 0
+    )
+
+    # We do the same for minimums to be consistent.
+    total_minimum_storage = (
+        min_reqs_qs.aggregate(total_storage=Sum("storage_size"))["total_storage"] or 0
+    )
+
     # Find the single most demanding requirement for both minimum and recommended
     heaviest_min = get_heaviest_requirement(min_reqs_qs)
     heaviest_rec = get_heaviest_requirement(rec_reqs_qs)
 
+    # --- CHANGE 3: USE THE HELPER FUNCTION FOR CLEANER CODE ---
     defaults = {}
-    if heaviest_min:
-        defaults.update(
-            {
-                "min_cpu_name": heaviest_min.cpu,
-                "min_gpu_name": heaviest_min.gpu,
-                "min_cpu_score": heaviest_min.cpu_score,
-                "min_gpu_score": heaviest_min.gpu_score,
-                "min_ram": heaviest_min.ram,
-                "min_storage_size": heaviest_min.storage_size,
-                "min_storage_type": heaviest_min.storage_type,
-            }
-        )
-
-    if heaviest_rec:
-        defaults.update(
-            {
-                "recommended_cpu_name": heaviest_rec.cpu,
-                "recommended_gpu_name": heaviest_rec.gpu,
-                "recommended_cpu_score": heaviest_rec.cpu_score,
-                "recommended_gpu_score": heaviest_rec.gpu_score,
-                "recommended_ram": heaviest_rec.ram,
-                "recommended_storage_size": heaviest_rec.storage_size,
-                "recommended_storage_type": heaviest_rec.storage_type,
-            }
-        )
+    defaults.update(
+        _populate_spec_defaults("minimum", heaviest_min, total_minimum_storage)
+    )
+    defaults.update(
+        _populate_spec_defaults("recommended", heaviest_rec, total_recommended_storage)
+    )
 
     if not defaults:
         print(f"Could not determine any specs for preference {pref.id}.")
         return None
 
-    # --- THE KEY CHANGE ---
-    # We now ALWAYS use .create() to make a new recommendation spec.
-    # This prevents overwriting old ones.
+    # The rest of the function is excellent and remains the same.
     rec_spec = RecommendationSpecification.objects.create(
         user=pref.user,
         session_id=str(pref.session_id) if not pref.user else None,
@@ -104,7 +125,6 @@ def generate_recommendation(user=None, session_id=None):
     )
     print(f"Created new recommendation {rec_spec.id} for preference {pref.id}.")
 
-    # Create the associated log and feedback objects
     RecommendationFeedback.objects.create(recommendation=rec_spec)
     RecommendationLog.objects.create(
         source_preference=pref,

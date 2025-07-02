@@ -3,6 +3,8 @@ from .models import *
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    from login_and_register.serializers import NestedVendorProfileSerializer
+
     action = serializers.ChoiceField(
         choices=["confirm", "cancel"],
         write_only=True,
@@ -10,6 +12,9 @@ class OrderSerializer(serializers.ModelSerializer):
         help_text="Send 'confirm' or 'cancel' to change order status.",
     )
     product_name = serializers.StringRelatedField(source="product")
+
+    # --- THIS IS THE FIX: Nest vendor details for the frontend ---
+    vendor = NestedVendorProfileSerializer(read_only=True)
 
     class Meta:
         model = Order

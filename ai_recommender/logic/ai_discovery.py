@@ -22,10 +22,8 @@ def _save_single_enriched_app_data(
     app_name = app_data.get("name")
     if not app_name:
         return None
-
     try:
         with transaction.atomic():
-            # Check if this application already exists.
             application, created = Application.objects.get_or_create(
                 name__iexact=app_name.strip(),
                 defaults={
@@ -35,10 +33,9 @@ def _save_single_enriched_app_data(
                     "intensity_level": app_data.get("intensity_level", "medium"),
                 },
             )
-
             # If the app was newly created, it needs its requirements added.
             # --- Start of new logging logic ---
-            if created:
+            if created or not application.requirements.exists():
                 print(
                     f"Creating new application '{application.name}' with requirements."
                 )
@@ -79,50 +76,43 @@ def discover_and_enrich_apps_for_activity(
     activity: Activity, user_considerations: str = ""
 ) -> list[Application]:
     """
-    Uses a single, powerful AI call to get the top 3 applications for an activity
+    Uses a single, powerful AI call to get up to 3 applications for an activity
     AND their system requirements all at once.
-
-    Returns a list of the Application objects that were created or linked.
     """
     print(f"Starting one-shot AI discovery for activity: '{activity.name}'")
 
-    prompt = f"""
-    Give me the top 3 most popular and essential software applications for the activity: "{activity.name}".
-    When selecting the applications, you MUST take the following user considerations into account:
-    **User Considerations:** "{user_considerations}"
-    For each application, provide its system requirements.
-    Your response MUST be a single, valid JSON object. Do not add any text before or after the JSON.
-    The root key must be "discovered_applications", which is an array of application objects.
-    Each application object must have the following exact structure:
-    {{
-      "name": "Corrected App Name",
-      "source": "A valid URL to the official requirements page, or null if not found",
-      "intensity_level": "low, medium, or high",
-      "requirements": [
-        {{"type": "minimum", "cpu": "Intel Core i5-6600K", "gpu": "NVIDIA GeForce GTX 970", "ram": 8, "storage_size": 50, "storage_type": "HDD"}},
-        {{"type": "recommended", "cpu": "Intel Core i7-8700K", "gpu": "NVIDIA GeForce GTX 1080 Ti", "ram": 16, "storage_size": 50, "storage_type": "SSD"}}
-      ]
-    }}
+    if user_considerations and user_considerations.strip():
+        considerations_instruction = f"""
+        **User Needs (Mandatory Filter):** You must filter your choices based on these user needs: "{user_considerations}". For example, if the user mentions a budget, you MUST select free-to-play or less demanding games.
+        """
+    else:
+        considerations_instruction = "**User Needs (Mandatory Filter):** None provided. Select the most standard, graphically intensive examples."
 
-    Example JSON response format:
+    # --- THE NEW, MORE EFFECTIVE PROMPT ---
+    prompt = f"""
+    You are an expert PC hardware analyst. Your task is to identify up to 3 specific **software titles or video games** that are excellent examples for the user's primary activity: **"{activity.name}"**.
+
+    **IMPORTANT:** Do NOT list utility software like "Discord", "Steam", "OBS", or "Nvidia GeForce Experience". I only want the actual game or application titles that are demanding on the hardware.
+
+    {considerations_instruction}
+
+    For each title you select, provide its official Minimum and Recommended system requirements.
+
+    Your response MUST be a single, valid JSON object without any other text or markdown.
+    The root key must be "discovered_applications".
+
+    **CRITICAL RULE:** The "ram" and "storage_size" fields in the JSON MUST be **integers only**, representing the value in Gigabytes (GB). For example, "16 GB RAM" must be formatted as `"ram": 16`.
+
+    JSON Structure Example:
     {{
         "discovered_applications": [
             {{
-                "name": "Blender",
-                "source": "https://www.blender.org/download/requirements/",
+                "name": "Cyberpunk 2077",
+                "source": "https://support.cdprojektred.com/en/cyberpunk/pc/sp-technical/issue/1558/system-requirements",
                 "intensity_level": "high",
                 "requirements": [
-                    {{"type": "minimum", "cpu": "Intel Core i3", "gpu": "NVIDIA GeForce 400 Series", "ram": 8, "storage_size": 1, "storage_type": "HDD"}},
-                    {{"type": "recommended", "cpu": "Intel Core i9", "gpu": "NVIDIA GeForce RTX 3060", "ram": 32, "storage_size": 2, "storage_type": "SSD"}}
-                ]
-            }},
-            {{
-                "name": "Autodesk Maya",
-                "source": null,
-                "intensity_level": "high",
-                "requirements": [
-                    {{"type": "minimum", "cpu": "Intel Core i5", "gpu": "NVIDIA Quadro P600", "ram": 8, "storage_size": 7, "storage_type": "HDD"}},
-                    {{"type": "recommended", "cpu": "Intel Core i7", "gpu": "NVIDIA Quadro RTX 4000", "ram": 16, "storage_size": 7, "storage_type": "SSD"}}
+                    {{ "type": "minimum", "cpu": "Intel Core i7-6700", "gpu": "Nvidia GeForce GTX 1060 6GB", "ram": 12, "storage_size": 70, "storage_type": "SSD" }},
+                    {{ "type": "recommended", "cpu": "Intel Core i7-12700", "gpu": "Nvidia GeForce RTX 2060 SUPER", "ram": 16, "storage_size": 70, "storage_type": "SSD" }}
                 ]
             }}
         ]

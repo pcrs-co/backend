@@ -151,6 +151,7 @@ class RecommendView(APIView):
 
 class ProductRecommendationView(APIView):
     permission_classes = [AllowAny]
+    from vendor.serializers import ProductRecommendationSerializer
 
     def get(self, request, *args, **kwargs):
         # 1. Get the user's latest recommendation spec
@@ -282,10 +283,12 @@ class UserHistoryView(generics.ListAPIView):
     Returns the recommendation history for the currently authenticated user.
     """
 
-    serializer_class = UserRecommendationHistorySerializer
+    serializer_class = UserRecommendationHistorySerializer  # Use our new serializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None  # Show all history, no pagination
 
     def get_queryset(self):
+        # Filter for the current user and order by most recent first
         return RecommendationSpecification.objects.filter(
             user=self.request.user
         ).order_by("-created_at")
