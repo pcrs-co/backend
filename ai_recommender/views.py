@@ -1,4 +1,6 @@
 # ai_recommender/views.py
+from django.db.models import Case, When, F, FloatField, Value
+from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
 from rest_framework import status, viewsets, generics
 from rest_framework.response import Response
@@ -13,6 +15,8 @@ from .logic.ai_discovery import discover_and_enrich_apps_for_activity
 from .mixins import AsynchronousBenchmarkUploadMixin
 from vendor.models import Product
 from vendor.serializers import ProductRecommendationSerializer
+from .logic.matching_engine import find_matching_products
+
 
 # ===================================================================
 # Admin ViewSets for Benchmark Management
@@ -140,12 +144,11 @@ class RecommendView(APIView):
         return Response(result_serializer.data, status=status.HTTP_200_OK)
 
 
-# --- UPDATED: ProductRecommendationView ---
 class ProductRecommendationView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        # ... (Your logic to get rec_spec is correct) ...
+        # 1. Get the user's latest recommendation spec
         user = request.user if request.user.is_authenticated else None
         session_id = request.query_params.get("session_id")
         if not user and not session_id:
@@ -153,6 +156,7 @@ class ProductRecommendationView(APIView):
                 {"error": "User or session_id is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         spec_filter = (
             {"user": user}
             if user and user.is_authenticated
@@ -164,59 +168,42 @@ class ProductRecommendationView(APIView):
             .first()
         )
 
-        if not rec_spec or not rec_spec.recommended_cpu_score:
+        if not rec_spec:
             return Response(
                 {"error": "No recommendation found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        # --- NEW LOGIC: Determine which spec level to use ---
+        # 2. Get the desired spec level from the request
         spec_level = request.query_params.get("spec_level", "recommended").lower()
 
-        if spec_level == "minimum":
-            target_cpu_score = rec_spec.min_cpu_score
-            target_gpu_score = rec_spec.min_gpu_score
-            target_ram = rec_spec.min_ram
-            target_storage = rec_spec.min_storage_size
-        else:  # Default to recommended
-            target_cpu_score = rec_spec.recommended_cpu_score
-            target_gpu_score = rec_spec.recommended_gpu_score
-            target_ram = rec_spec.recommended_ram
-            target_storage = rec_spec.recommended_storage_size
+        # --- 3. CALL THE MATCHING ENGINE ---
+        # All the complex logic is now in one place.
+        matching_products = find_matching_products(rec_spec, spec_level)
 
-        # Check if the chosen spec level has data
-        if not target_cpu_score:
-            return Response(
-                {
-                    "error": f"No '{spec_level}' specification data available to find products."
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # --- Build the product query ---
-        products = Product.objects.filter(
-            cpu_score__gte=target_cpu_score,
-            gpu_score__gte=target_gpu_score,
-            memory__capacity_gb__gte=target_ram,
-            storage__capacity_gb__gte=target_storage,
-        )
-
-        # --- NEW LOGIC: Apply optional budget filter ---
+        # 4. Apply optional budget filter
         max_price_str = request.query_params.get("max_price")
         if max_price_str:
             try:
-                max_price = Decimal(max_price_str)
-                if max_price > 0:
-                    products = products.filter(price__lte=max_price)
+                matching_products = matching_products.filter(
+                    price__lte=Decimal(max_price_str)
+                )
             except (InvalidOperation, ValueError):
-                # Silently ignore invalid budget values
                 pass
 
-        # Order by price and continue with pagination
-        products = products.order_by("price")
-
+        # 5. Paginate and Serialize
         paginator = PageNumberPagination()
-        paginated_products = paginator.paginate_queryset(products, request)
-        serializer = ProductRecommendationSerializer(paginated_products, many=True)
+        paginated_products = paginator.paginate_queryset(matching_products, request)
+
+        # We still pass context to the serializer so it can generate helpful tags
+        serializer_context = {
+            "request": request,
+            "rec_spec": rec_spec,
+            "spec_level": spec_level,
+        }
+        serializer = ProductRecommendationSerializer(
+            paginated_products, many=True, context=serializer_context
+        )
+
         return paginator.get_paginated_response(serializer.data)
 
 

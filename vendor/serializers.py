@@ -384,14 +384,16 @@ class ProductUploadSerializer(serializers.Serializer):
         return created_count
 
 
-# --- UPDATED: ProductRecommendationSerializer ---
 class ProductRecommendationSerializer(serializers.ModelSerializer):
     vendor = VendorSerializer(read_only=True)
     processor = ProcessorSerializer(read_only=True)
     memory = MemorySerializer(read_only=True)
     storage = StorageSerializer(read_only=True)
     graphic = GraphicSerializer(read_only=True)
-    images = ProductImageSerializer(many=True, read_only=True)  # <-- ADD THIS
+    images = ProductImageSerializer(many=True, read_only=True)
+
+    # --- The New Field to Explain the Match ---
+    match_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -406,5 +408,61 @@ class ProductRecommendationSerializer(serializers.ModelSerializer):
             "memory",
             "storage",
             "graphic",
-            "images",  # <-- ADD images
+            "images",
+            "match_details",  # <-- Add the new field
         ]
+
+    def get_match_details(self, obj):
+        # Retrieve the recommendation spec from the context we passed in the view
+        rec_spec = self.context.get("rec_spec")
+        spec_level = self.context.get("spec_level")
+        if not rec_spec:
+            return None
+
+        # Determine which spec level to compare against
+        if spec_level == "minimum":
+            target_cpu_score = rec_spec.min_cpu_score or 0
+            target_gpu_score = rec_spec.min_gpu_score or 0
+            target_ram = rec_spec.min_ram or 0
+        else:
+            target_cpu_score = rec_spec.recommended_cpu_score or 0
+            target_gpu_score = rec_spec.recommended_gpu_score or 0
+            target_ram = rec_spec.recommended_ram or 0
+
+        # Get the product's actual specs
+        product_cpu_score = obj.cpu_score or 0
+        product_gpu_score = obj.gpu_score or 0
+        product_ram = obj.memory.capacity_gb if obj.memory else 0
+
+        # --- Logic to generate helpful tags ---
+        tags = []
+        is_perfect_match = (
+            product_cpu_score >= target_cpu_score
+            and product_gpu_score >= target_gpu_score
+            and product_ram >= target_ram
+        )
+
+        if is_perfect_match:
+            tags.append({"text": "Perfect Match", "type": "success"})
+
+        # Add tags for exceeding specs
+        if product_cpu_score > target_cpu_score * 1.2:  # Exceeds by 20%
+            tags.append({"text": "Better CPU", "type": "info"})
+        if product_gpu_score > target_gpu_score * 1.2:
+            tags.append({"text": "Better GPU", "type": "info"})
+
+        # Add tags for missing specs (only if not a perfect match)
+        if not is_perfect_match:
+            if product_cpu_score < target_cpu_score:
+                tags.append({"text": "Weaker CPU", "type": "warning"})
+            if product_gpu_score < target_gpu_score:
+                tags.append({"text": "Weaker GPU", "type": "warning"})
+            if product_ram < target_ram:
+                tags.append({"text": "Less RAM", "type": "warning"})
+
+        return {
+            "match_score": getattr(
+                obj, "match_score", 0
+            ),  # Get the score we annotated in the view
+            "tags": tags,
+        }

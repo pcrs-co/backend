@@ -101,53 +101,8 @@ class Product(models.Model):
         blank=True,
     )
 
-    # The scores that will be automatically populated
-    cpu_score = models.IntegerField(blank=True, null=True)
-    gpu_score = models.IntegerField(blank=True, null=True)
-
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
-
-    def save(self, *args, **kwargs):
-        """
-        Overrides the default save method to populate cpu_score and gpu_score
-        by calling the centralized benchmark matching function.
-        """
-        # --- CPU Score Lookup ---
-        if self.processor and self.processor.data_received:
-            # We call the single, authoritative function from the utils module
-            best_match = find_best_benchmark_object(self.processor.data_received, "cpu")
-            if best_match:
-                self.cpu_score = best_match.score
-                print(
-                    f"Success: Matched CPU '{self.processor.data_received}' to '{best_match.name}' (Score: {self.cpu_score})"
-                )
-            else:
-                self.cpu_score = None
-                print(
-                    f"Warning: No benchmark match for CPU '{self.processor.data_received}'"
-                )
-        else:
-            self.cpu_score = None
-
-        # --- GPU Score Lookup ---
-        if self.graphic and self.graphic.data_received:
-            # Re-use the same authoritative function for the GPU
-            best_match = find_best_benchmark_object(self.graphic.data_received, "gpu")
-            if best_match:
-                self.gpu_score = best_match.score
-                print(
-                    f"Success: Matched GPU '{self.graphic.data_received}' to '{best_match.name}' (Score: {self.gpu_score})"
-                )
-            else:
-                self.gpu_score = None
-                print(
-                    f"Warning: No benchmark match for GPU '{self.graphic.data_received}'"
-                )
-        else:
-            self.gpu_score = None
-
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -192,8 +147,19 @@ class Processor(models.Model):
     boost_clock_speed = models.FloatField(blank=True, null=True)
     cache_size = models.CharField(max_length=50, blank=True, null=True)
     integrated_graphics = models.BooleanField(max_length=50, blank=True, null=True)
+    score = models.IntegerField(null=True, blank=True)  # <-- ADD THIS FIELD
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # --- NEW LOGIC: POPULATE ITS OWN SCORE ---
+        from ai_recommender.logic.utils import find_best_benchmark_object
+
+        if self.data_received and self.score is None:
+            best_match = find_best_benchmark_object(self.data_received, "cpu")
+            if best_match:
+                self.score = best_match.score
+        super().save(*args, **kwargs)
 
 
 class Memory(models.Model):
@@ -225,8 +191,20 @@ class Storage(models.Model):
     rpm = models.IntegerField(blank=True, null=True)
     read_speed_mbps = models.IntegerField(blank=True, null=True)
     write_speed_mbps = models.IntegerField(blank=True, null=True)
+    score = models.IntegerField(null=True, blank=True)  # <-- ADD THIS FIELD
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # --- NEW LOGIC: POPULATE ITS OWN SCORE ---
+        # Note: You'll need a find_best_benchmark_object for disks if you want this to work.
+        # from ai_recommender.logic.utils import find_best_disk_benchmark_object
+
+        # if self.data_received and self.score is None:
+        #     best_match = find_best_disk_benchmark_object(self.data_received)
+        #     if best_match:
+        #         self.score = best_match.score
+        super().save(*args, **kwargs)
 
 
 class Graphic(models.Model):
@@ -236,8 +214,19 @@ class Graphic(models.Model):
     model = models.CharField(max_length=50, blank=True, null=True)
     vram_size_gb = models.IntegerField(blank=True, null=True)
     series = models.CharField(max_length=50, blank=True, null=True)
+    score = models.IntegerField(null=True, blank=True)  # <-- ADD THIS FIELD
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # --- NEW LOGIC: POPULATE ITS OWN SCORE ---
+        from ai_recommender.logic.utils import find_best_benchmark_object
+
+        if self.data_received and self.score is None:
+            best_match = find_best_benchmark_object(self.data_received, "gpu")
+            if best_match:
+                self.score = best_match.score
+        super().save(*args, **kwargs)
 
 
 class Display(models.Model):

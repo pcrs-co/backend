@@ -9,6 +9,7 @@ import pandas as pd
 import string
 import random
 import re
+from login_and_register.serializers import VendorSerializer
 
 
 class CPUBenchmarkSerializer(serializers.ModelSerializer):
