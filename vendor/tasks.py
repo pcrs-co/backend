@@ -4,7 +4,7 @@ from .models import (
     Product,
     CPUBenchmark,
     GPUBenchmark,
-    find_best_benchmark_match,
+    find_best_benchmark_object,
 )
 
 
@@ -32,7 +32,7 @@ def update_missing_product_scores(product_id=None):
             and product.processor
             and product.processor.data_received
         ):
-            best_match = find_best_benchmark_match(
+            best_match = find_best_benchmark_object(
                 product.processor.data_received, CPUBenchmark
             )
             if best_match:
@@ -45,7 +45,7 @@ def update_missing_product_scores(product_id=None):
             and product.graphic
             and product.graphic.data_received
         ):
-            best_match = find_best_benchmark_match(
+            best_match = find_best_benchmark_object(
                 product.graphic.data_received, GPUBenchmark
             )
             if best_match:

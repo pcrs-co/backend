@@ -106,13 +106,18 @@ class RecommendView(APIView):
         # --- Step 2: Perform AI Enrichment Synchronously ---
         # Instead of a Celery task, we do the work right here, because the user is waiting.
         user_activities = preference.activities.all()
+        # --- GET THE CONSIDERATIONS FROM THE PREFERENCE OBJECT ---
+        user_considerations = preference.considerations
 
         print(f"--- Starting Synchronous Enrichment for Preference {preference.id} ---")
         for activity in user_activities:
             # Only run the expensive AI call if we don't already have data for this activity
             if not activity.applications.exists():
                 print(f"-> Activity '{activity.name}' is new. Running AI discovery...")
-                newly_processed_apps = discover_and_enrich_apps_for_activity(activity)
+                # --- PASS CONSIDERATIONS TO THE FUNCTION ---
+                newly_processed_apps = discover_and_enrich_apps_for_activity(
+                    activity, user_considerations
+                )
                 if newly_processed_apps:
                     preference.applications.add(*newly_processed_apps)
             else:

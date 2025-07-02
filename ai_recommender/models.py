@@ -279,6 +279,10 @@ class UserPreference(models.Model):
     activities = models.ManyToManyField(Activity)
     applications = models.ManyToManyField(Application, blank=True)
     budget = models.DecimalField(max_digits=65, decimal_places=2, null=True, blank=True)
+    considerations = models.TextField(
+        blank=True,
+        help_text="User's other preferences, e.g., 'lightweight', 'budget around $1000'.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 

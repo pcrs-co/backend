@@ -75,7 +75,9 @@ def _save_single_enriched_app_data(
         return None
 
 
-def discover_and_enrich_apps_for_activity(activity: Activity) -> list[Application]:
+def discover_and_enrich_apps_for_activity(
+    activity: Activity, user_considerations: str = ""
+) -> list[Application]:
     """
     Uses a single, powerful AI call to get the top 3 applications for an activity
     AND their system requirements all at once.
@@ -86,6 +88,8 @@ def discover_and_enrich_apps_for_activity(activity: Activity) -> list[Applicatio
 
     prompt = f"""
     Give me the top 3 most popular and essential software applications for the activity: "{activity.name}".
+    When selecting the applications, you MUST take the following user considerations into account:
+    **User Considerations:** "{user_considerations}"
     For each application, provide its system requirements.
     Your response MUST be a single, valid JSON object. Do not add any text before or after the JSON.
     The root key must be "discovered_applications", which is an array of application objects.

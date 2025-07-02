@@ -9,7 +9,7 @@ from rest_framework import serializers
 from django.core.mail import send_mail
 from django.db.models import Count, Q
 from django.db import transaction
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from .models import *
 import pandas as pd
@@ -304,27 +304,62 @@ class ProductSerializer(serializers.ModelSerializer):
         )
 
 
-# --- THE MAIN SERIALIZER for BULK UPLOADS ---
+# --- FULLY REBUILT AND CORRECTED: ProductUploadSerializer ---
 class ProductUploadSerializer(serializers.Serializer):
-    file = serializers.FileField(write_only=True)
-    image_zip = serializers.FileField(write_only=True, required=False)
+    """
+    Handles bulk-creating products from a spreadsheet and a single zip file of images.
+    This serializer is robust against missing data and uses efficient bulk operations.
+    """
+
+    file = serializers.FileField(
+        write_only=True, help_text="The spreadsheet (.csv, .xls, .xlsx)."
+    )
+    image_zip = serializers.FileField(
+        write_only=True, required=False, help_text="A zip file containing all images."
+    )
+
+    def _clean_price(self, price_str):
+        """A robust helper to clean and convert a price string to a Decimal."""
+        if price_str is None or pd.isna(price_str):
+            return Decimal("0.00")
+
+        # Convert to string and remove anything that is not a digit or a decimal point.
+        cleaned_str = re.sub(r"[^0-9.]", "", str(price_str))
+
+        if not cleaned_str:
+            return Decimal("0.00")
+
+        try:
+            return Decimal(cleaned_str)
+        except InvalidOperation:
+            # If conversion fails after cleaning, return 0.00
+            return Decimal("0.00")
 
     def validate_file(self, value):
-        if not any(
-            value.name.lower().endswith(ext) for ext in [".csv", ".xls", ".xlsx"]
-        ):
+        supported_extensions = [".csv", ".xls", ".xlsx"]
+        if not any(value.name.lower().endswith(ext) for ext in supported_extensions):
             raise serializers.ValidationError(
-                "Unsupported file format. Use .csv, .xls, or .xlsx."
+                "Unsupported spreadsheet format. Use .csv, .xls, or .xlsx."
             )
+        return value
+
+    def validate_image_zip(self, value):
+        if value and not value.name.lower().endswith(".zip"):
+            raise serializers.ValidationError("Image file must be a .zip archive.")
         return value
 
     @transaction.atomic
     def save(self, **kwargs):
         vendor = kwargs.get("vendor")
+        if not vendor:
+            raise serializers.ValidationError(
+                "A vendor must be provided to save products."
+            )
+
         spreadsheet_file = self.validated_data["file"]
         zip_file = self.validated_data.get("image_zip")
 
-        # 1. Unzip Images into an in-memory map
+        # 1. UNZIP IMAGES
         image_map = {}
         if zip_file:
             try:
@@ -332,22 +367,23 @@ class ProductUploadSerializer(serializers.Serializer):
                     for filename in zf.namelist():
                         if filename.startswith("__MACOSX/") or filename.endswith("/"):
                             continue
-                        base_filename = filename.split("/")[-1]
                         image_data = zf.read(filename)
-                        image_map[base_filename] = InMemoryUploadedFile(
+                        in_memory_file = InMemoryUploadedFile(
                             io.BytesIO(image_data),
                             "image",
-                            base_filename,
+                            filename,
                             "image/jpeg",
                             len(image_data),
                             None,
                         )
+                        base_filename = filename.split("/")[-1]
+                        image_map[base_filename] = in_memory_file
             except zipfile.BadZipFile:
                 raise serializers.ValidationError(
                     "The uploaded image file is not a valid zip archive."
                 )
 
-        # 2. Read Spreadsheet
+        # 2. READ SPREADSHEET
         try:
             df = (
                 pd.read_excel(spreadsheet_file)
@@ -358,67 +394,87 @@ class ProductUploadSerializer(serializers.Serializer):
         except Exception as e:
             raise serializers.ValidationError(f"Could not read the spreadsheet: {e}")
 
-        # 3. Process Rows
-        component_cache = {}
+        # 3. SETUP
+        component_cache, created_count, images_to_create = {}, 0, []
         component_map = {
             "processor": Processor,
             "memory": Memory,
             "storage": Storage,
             "graphic": Graphic,
+            "display": Display,
+            "ports": PortsConnectivity,
+            "battery": PowerBattery,
+            "cooling": Cooling,
+            "os": OperatingSystem,
+            "formfactor": FormFactor,
+            "extra": Extra,
         }
 
-        products_to_create = []
-        image_links_to_create = []
+        if "image" not in df.columns:
+            df["image"] = ""
 
+        # 4. PROCESS EACH ROW
         for index, row in df.iterrows():
-            product_components = {}
-            for col_name, ModelClass in component_map.items():
-                component_text = str(row.get(col_name, "")).strip()
-                if not component_text:
-                    continue
+            try:
+                product_components = {}
+                for col_name, model_class in component_map.items():
+                    data_str = str(row.get(col_name, "")).strip()
+                    if not data_str:
+                        continue
+                    cache_key = (model_class, data_str)
+                    if cache_key not in component_cache:
+                        instance, _ = model_class.objects.get_or_create(
+                            data_received=data_str
+                        )
+                        component_cache[cache_key] = instance
+                    product_components[col_name] = component_cache[cache_key]
 
-                if (ModelClass, component_text) not in component_cache:
-                    instance, _ = ModelClass.objects.get_or_create(
-                        data_received=component_text
-                    )
-                    component_cache[(ModelClass, component_text)] = instance
-                product_components[col_name] = component_cache[
-                    (ModelClass, component_text)
+                # --- THIS IS THE FIX ---
+                # Use the robust cleaning helper function
+                final_price = self._clean_price(row.get("price"))
+
+                # Create product individually to get an ID for images
+                product_instance = Product.objects.create(
+                    name=str(
+                        row.get("product_name", f"Unnamed Product {index+1}")
+                    ).strip(),
+                    price=final_price,
+                    brand=str(row.get("brand", "Unknown Brand")).strip(),
+                    product_type=str(row.get("product_type", "laptop")).strip().lower(),
+                    vendor=vendor,
+                    **product_components,
+                )
+                created_count += 1
+
+                # Prepare images for this product
+                filenames = [
+                    name.strip()
+                    for name in str(row.get("image", "")).split(",")
+                    if name.strip()
                 ]
+                for filename in filenames:
+                    if filename in image_map:
+                        images_to_create.append(
+                            ProductImage(
+                                product=product_instance,
+                                image=image_map[filename],
+                                alt_text=f"{product_instance.name}",
+                            )
+                        )
+            except Exception as e:
+                print(f"Skipping spreadsheet row {index + 2} due to error: {e}")
+                continue
 
-            product_instance = Product(
-                name=str(row.get("name", f"Product {index+1}")).strip(),
-                brand=str(row.get("brand", "N/A")).strip(),
-                product_type=str(row.get("product_type", "laptop")).strip(),
-                price=Decimal(row.get("price", "0.00")),
-                quantity=int(row.get("quantity", 1)),
-                vendor=vendor,
-                **product_components,
-            )
-            products_to_create.append(product_instance)
-
-            image_filenames = [
-                name.strip()
-                for name in str(row.get("image", "")).split(",")
-                if name.strip()
-            ]
-            image_links_to_create.append(image_filenames)
-
-        # 4. Bulk Create Products & Images
-        created_products = Product.objects.bulk_create(products_to_create)
-
-        images_to_create = []
-        for product, filenames in zip(created_products, image_links_to_create):
-            for filename in filenames:
-                if filename in image_map:
-                    images_to_create.append(
-                        ProductImage(product=product, image=image_map[filename])
-                    )
-
+        # 5. BULK CREATE IMAGES
         if images_to_create:
-            ProductImage.objects.bulk_create(images_to_create)
+            ProductImage.objects.bulk_create(images_to_create, batch_size=100)
 
-        return len(created_products)
+        if created_count == 0:
+            raise serializers.ValidationError(
+                "No valid product rows were found in the file."
+            )
+
+        return created_count
 
 
 class ProductRecommendationSerializer(serializers.ModelSerializer):
