@@ -93,46 +93,34 @@ def generate_recommendation(user=None, session_id=None):
         print(f"Could not determine any specs for preference {pref.id}.")
         return None
 
-    # Create the final recommendation object
-    rec, created = RecommendationSpecification.objects.update_or_create(
+    # --- THE KEY CHANGE ---
+    # We now ALWAYS use .create() to make a new recommendation spec.
+    # This prevents overwriting old ones.
+    rec_spec = RecommendationSpecification.objects.create(
         user=pref.user,
         session_id=str(pref.session_id) if not pref.user else None,
-        defaults={"source_preference": pref, **defaults},
+        source_preference=pref,
+        **defaults,
     )
+    print(f"Created new recommendation {rec_spec.id} for preference {pref.id}.")
 
-    if created:
-        # If we created a new recommendation, create a blank feedback form for it.
-        RecommendationFeedback.objects.create(recommendation=rec)
-        print(f"Created blank feedback form for new recommendation {rec.id}.")
-
-    print(
-        f"{'Created' if created else 'Updated'} recommendation {rec.id} for preference {pref.id}."
-    )
-    # --- THIS IS THE NEW LEARNING STEP ---
-    # Create a log entry of this decision for later review.
-    # We only create a new log, we never update an old one.
+    # Create the associated log and feedback objects
+    RecommendationFeedback.objects.create(recommendation=rec_spec)
     RecommendationLog.objects.create(
         source_preference=pref,
-        final_recommendation=rec,
+        final_recommendation=rec_spec,
         activities_json=list(pref.activities.values_list("name", flat=True)),
         applications_json=[
             {
                 "name": app.name,
-                "min_cpu": (
-                    app.requirements.filter(type="minimum").first().cpu
-                    if app.requirements.filter(type="minimum").exists()
-                    else None
-                ),
-                "rec_cpu": (
+                "cpu": (
                     app.requirements.filter(type="recommended").first().cpu
                     if app.requirements.filter(type="recommended").exists()
                     else None
                 ),
             }
-            for app in apps
+            for app in pref.applications.all()
         ],
     )
-    print(f"Created RecommendationLog for recommendation {rec.id}.")
-    # --- END OF NEW LEARNING STEP ---
 
-    return rec
+    return rec_spec

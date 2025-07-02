@@ -15,6 +15,8 @@ def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
     Processes a benchmark DataFrame and inserts/updates benchmark records.
     This function is fully compatible with the new models that auto-parse 'name'.
     """
+    from backend.ai_recommender.models import CPUBenchmark, GPUBenchmark, DiskBenchmark
+
     item_type = item_type.lower()
     # Sanitize column headers for consistency
     df.columns = (

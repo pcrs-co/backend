@@ -94,11 +94,81 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ["id", "image", "alt_text"]
 
 
-# --- UPDATED: ProductSerializer ---
-class ProductSerializer(
-    serializers.ModelSerializer
-):  # No longer needs WritableNestedModelSerializer
-    # Nested component serializers for READ operations
+class ProcessorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Processor
+        fields = "__all__"
+
+
+class MemorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Memory
+        fields = "__all__"
+
+
+class StorageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Storage
+        fields = "__all__"
+
+
+class GraphicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Graphic
+        fields = "__all__"
+
+
+class DisplaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Display
+        fields = "__all__"
+
+
+class PortsConnectivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PortsConnectivity
+        fields = "__all__"
+
+
+class PowerBatterySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PowerBattery
+        fields = "__all__"
+
+
+class CoolingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cooling
+        fields = "__all__"
+
+
+class OperatingSystemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OperatingSystem
+        fields = "__all__"
+
+
+class FormFactorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormFactor
+        fields = "__all__"
+
+
+class ExtraSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Extra
+        fields = "__all__"
+
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ["id", "image", "alt_text"]
+
+
+# --- THE MAIN SERIALIZER for a SINGLE PRODUCT ---
+class ProductSerializer(serializers.ModelSerializer):
+    # For READ operations, use the detailed component serializers.
     processor = ProcessorSerializer(read_only=True)
     memory = MemorySerializer(read_only=True)
     storage = StorageSerializer(read_only=True)
@@ -110,17 +180,28 @@ class ProductSerializer(
     operating_system = OperatingSystemSerializer(read_only=True)
     form_factor = FormFactorSerializer(read_only=True)
     extra = ExtraSerializer(read_only=True)
-    # +++ ADD THIS NEW FIELD +++
-    vendor_order_summary = serializers.SerializerMethodField()
-
-    # For READ operations, display a list of all associated images
     images = ProductImageSerializer(many=True, read_only=True)
 
-    # For WRITE operations (creating a single product), accept a list of uploaded images
+    # This is a computed field for the vendor dashboard.
+    vendor_order_summary = serializers.SerializerMethodField()
+
+    # For WRITE operations (creating/updating a single product), accept raw text.
+    processor_str = serializers.CharField(
+        write_only=True, required=False, allow_blank=True
+    )
+    memory_str = serializers.CharField(
+        write_only=True, required=False, allow_blank=True
+    )
+    storage_str = serializers.CharField(
+        write_only=True, required=False, allow_blank=True
+    )
+    graphic_str = serializers.CharField(
+        write_only=True, required=False, allow_blank=True
+    )
+    # ... Add more _str fields for other components if needed ...
+
     uploaded_images = serializers.ListField(
-        child=serializers.ImageField(allow_empty_file=False, use_url=False),
-        write_only=True,
-        required=False,
+        child=serializers.ImageField(use_url=False), write_only=True, required=False
     )
 
     class Meta:
@@ -145,118 +226,105 @@ class ProductSerializer(
             "form_factor",
             "extra",
             "images",
+            "vendor_order_summary",
+            # Write-only fields
+            "processor_str",
+            "memory_str",
+            "storage_str",
+            "graphic_str",
             "uploaded_images",
-            "vendor_order_summary",  # <-- ADD THIS NEW FIELD
         )
         read_only_fields = ("id", "vendor")
 
-    # +++ ADD THIS NEW METHOD +++
-    def get_vendor_order_summary(self, obj):
-        request = self.context.get("request")
-        user = request.user if request else None
-
-        # Check if a user is authenticated and has a vendor profile
-        if not (user and user.is_authenticated and hasattr(user, "vendor")):
+    def _get_or_create_component(self, data_received, ModelClass):
+        if not data_received or not data_received.strip():
             return None
-
-        # Check if the authenticated vendor is the one who owns this product
-        if user.vendor.id == obj.vendor.id:
-            # If so, aggregate order stats for this product
-            summary = Order.objects.filter(product=obj).aggregate(
-                pending_orders=Count("id", filter=Q(status="pending")),
-                confirmed_orders=Count("id", filter=Q(status="confirmed")),
-            )
-            return summary
-
-        # If the user is a vendor but not the owner, return nothing
-        return None
-
-    def _handle_nested_component(self, validated_data, component_name_str, model_class):
-        component_data_str = validated_data.pop(component_name_str, "{}")
-        try:
-            component_data = json.loads(component_data_str)
-        except (json.JSONDecodeError, TypeError):
-            component_data = {}
-        data_received = component_data.get("data_received", "").strip()
-        if not data_received:
-            return None
-        instance, _ = model_class.objects.get_or_create(data_received=data_received)
+        # This one line handles everything: finding an existing component or creating a new one.
+        # When a new one is created, its .save() method is called, which triggers the score lookup.
+        instance, _ = ModelClass.objects.get_or_create(
+            data_received=data_received.strip()
+        )
         return instance
 
     @transaction.atomic
     def create(self, validated_data):
         images_data = validated_data.pop("uploaded_images", [])
 
-        components = {}
-        component_map = {
-            "processor": Processor,
-            "memory": Memory,
-            "storage": Storage,
-            "graphic": Graphic,
-            "display": Display,
-            "ports": PortsConnectivity,
-            "battery": PowerBattery,
-            "cooling": Cooling,
-            "operating_system": OperatingSystem,
-            "form_factor": FormFactor,
-            "extra": Extra,
+        # Create/get components from the raw string data
+        product_components = {
+            "processor": self._get_or_create_component(
+                validated_data.pop("processor_str", ""), Processor
+            ),
+            "memory": self._get_or_create_component(
+                validated_data.pop("memory_str", ""), Memory
+            ),
+            "storage": self._get_or_create_component(
+                validated_data.pop("storage_str", ""), Storage
+            ),
+            "graphic": self._get_or_create_component(
+                validated_data.pop("graphic_str", ""), Graphic
+            ),
+            "display": validated_data.pop("display", None),
+            "ports": validated_data.pop("ports", None),
+            "battery": validated_data.pop("battery", None),
+            "cooling": validated_data.pop("cooling", None),
+            "operating_system": validated_data.pop("operating_system", None),
+            "form_factor": validated_data.pop("form_factor", None),
+            "extra": validated_data.pop("extra", None),
+            # ... handle other components ...
         }
-        for name, model_class in component_map.items():
-            components[name] = self._handle_nested_component(
-                validated_data, name, model_class
-            )
 
-        product = Product.objects.create(**validated_data, **components)
+        # Create the product with the linked components
+        product = Product.objects.create(**validated_data, **product_components)
 
+        # Create associated images
         if images_data:
-            for image_file in images_data:
-                ProductImage.objects.create(product=product, image=image_file)
-
+            ProductImage.objects.bulk_create(
+                [
+                    ProductImage(product=product, image=image_file)
+                    for image_file in images_data
+                ]
+            )
         return product
 
-    # Update method would need similar logic, but is more complex to handle image additions/deletions.
-    # Focusing on the bulk upload as requested.
+    def get_vendor_order_summary(self, obj):
+        # This logic is correct and does not need changes.
+        request = self.context.get("request")
+        user = request.user if request else None
+        if not (
+            user
+            and user.is_authenticated
+            and hasattr(user, "vendor")
+            and user.vendor.id == obj.vendor.id
+        ):
+            return None
+        return Order.objects.filter(product=obj).aggregate(
+            pending_orders=Count("id", filter=Q(status="pending")),
+            confirmed_orders=Count("id", filter=Q(status="confirmed")),
+        )
 
 
-# --- FULLY REBUILT: ProductUploadSerializer ---
+# --- THE MAIN SERIALIZER for BULK UPLOADS ---
 class ProductUploadSerializer(serializers.Serializer):
-    """
-    Handles bulk-creating products from a spreadsheet and a single zip file of images.
-    This serializer is robust against missing data and uses efficient bulk operations.
-    """
-
-    file = serializers.FileField(
-        write_only=True, help_text="The spreadsheet (.csv, .xls, .xlsx)."
-    )
-    image_zip = serializers.FileField(
-        write_only=True, required=False, help_text="A zip file containing all images."
-    )
+    file = serializers.FileField(write_only=True)
+    image_zip = serializers.FileField(write_only=True, required=False)
 
     def validate_file(self, value):
-        supported_extensions = [".csv", ".xls", ".xlsx"]
-        if not any(value.name.lower().endswith(ext) for ext in supported_extensions):
+        if not any(
+            value.name.lower().endswith(ext) for ext in [".csv", ".xls", ".xlsx"]
+        ):
             raise serializers.ValidationError(
-                "Unsupported spreadsheet format. Use .csv, .xls, or .xlsx."
+                "Unsupported file format. Use .csv, .xls, or .xlsx."
             )
-        return value
-
-    def validate_image_zip(self, value):
-        if value and not value.name.lower().endswith(".zip"):
-            raise serializers.ValidationError("Image file must be a .zip archive.")
         return value
 
     @transaction.atomic
     def save(self, **kwargs):
         vendor = kwargs.get("vendor")
-        if not vendor:
-            raise serializers.ValidationError(
-                "A vendor must be provided to save products."
-            )
-
         spreadsheet_file = self.validated_data["file"]
         zip_file = self.validated_data.get("image_zip")
 
-        # 1. UNZIP IMAGES INTO IN-MEMORY MAP
+        # 1. Unzip Images into an in-memory map
         image_map = {}
         if zip_file:
             try:
@@ -264,124 +332,93 @@ class ProductUploadSerializer(serializers.Serializer):
                     for filename in zf.namelist():
                         if filename.startswith("__MACOSX/") or filename.endswith("/"):
                             continue
-
+                        base_filename = filename.split("/")[-1]
                         image_data = zf.read(filename)
-                        in_memory_file = InMemoryUploadedFile(
+                        image_map[base_filename] = InMemoryUploadedFile(
                             io.BytesIO(image_data),
                             "image",
-                            filename,
+                            base_filename,
                             "image/jpeg",
                             len(image_data),
                             None,
                         )
-                        base_filename = filename.split("/")[-1]
-                        image_map[base_filename] = in_memory_file
             except zipfile.BadZipFile:
                 raise serializers.ValidationError(
                     "The uploaded image file is not a valid zip archive."
                 )
 
-        # 2. READ SPREADSHEET
+        # 2. Read Spreadsheet
         try:
-            if spreadsheet_file.name.lower().endswith(".csv"):
-                df = pd.read_csv(spreadsheet_file)
-            else:
-                df = pd.read_excel(spreadsheet_file)
-
-            df = df.astype(str).fillna("")  # Prevents FutureWarning and dtype issues
+            df = (
+                pd.read_excel(spreadsheet_file)
+                if spreadsheet_file.name.lower().endswith((".xls", ".xlsx"))
+                else pd.read_csv(spreadsheet_file)
+            )
+            df = df.astype(str).replace("nan", "").fillna("")
         except Exception as e:
             raise serializers.ValidationError(f"Could not read the spreadsheet: {e}")
 
-        # 3. SETUP
+        # 3. Process Rows
         component_cache = {}
         component_map = {
-            "processor": (Processor, "processor"),
-            "memory": (Memory, "memory"),
-            "storage": (Storage, "storage"),
-            "graphic": (Graphic, "graphic"),
-            "display": (Display, "display"),
-            "ports": (PortsConnectivity, "ports"),
-            "battery": (PowerBattery, "battery"),
-            "cooling": (Cooling, "cooling"),
-            "os": (OperatingSystem, "operating_system"),
-            "formfactor": (FormFactor, "form_factor"),
-            "extra": (Extra, "extra"),
+            "processor": Processor,
+            "memory": Memory,
+            "storage": Storage,
+            "graphic": Graphic,
         }
 
-        if "image" not in df.columns:
-            df["image"] = ""
+        products_to_create = []
+        image_links_to_create = []
 
-        created_count = 0
-        images_to_create = []
-
-        # 4. PROCESS EACH ROW AND CREATE PRODUCT & PREPARE IMAGES
         for index, row in df.iterrows():
-            try:
-                product_components = {}
-                for col_name, (model, field_name) in component_map.items():
-                    component_name = str(row.get(col_name, "")).strip()
-                    if not component_name:
-                        continue
-                    cache_key = (model, component_name)
-                    if cache_key in component_cache:
-                        component_instance = component_cache[cache_key]
-                    else:
-                        component_instance, _ = model.objects.get_or_create(
-                            data_received=component_name
-                        )
-                        component_cache[cache_key] = component_instance
-                    product_components[field_name] = component_instance
+            product_components = {}
+            for col_name, ModelClass in component_map.items():
+                component_text = str(row.get(col_name, "")).strip()
+                if not component_text:
+                    continue
 
-                price_val = pd.to_numeric(row.get("price"), errors="coerce")
-                final_price = (
-                    Decimal("0.00") if pd.isna(price_val) else Decimal(price_val)
-                )
-
-                # CREATE PRODUCT INDIVIDUALLY TO GUARANTEE IT HAS AN ID
-                product_instance = Product.objects.create(
-                    name=str(
-                        row.get("product_name", f"Unnamed Product {index+1}")
-                    ).strip(),
-                    price=final_price,
-                    brand=str(row.get("brand", "Unknown Brand")).strip(),
-                    product_type=str(row.get("product_type", "uncategorized")).strip(),
-                    vendor=vendor,
-                    **product_components,
-                )
-                created_count += 1
-
-                # PREPARE IMAGES FOR BULK CREATION LATER
-                image_filenames_str = row.get("image", "")
-                filenames = [
-                    name.strip()
-                    for name in image_filenames_str.split(",")
-                    if name.strip()
+                if (ModelClass, component_text) not in component_cache:
+                    instance, _ = ModelClass.objects.get_or_create(
+                        data_received=component_text
+                    )
+                    component_cache[(ModelClass, component_text)] = instance
+                product_components[col_name] = component_cache[
+                    (ModelClass, component_text)
                 ]
-                for filename in filenames:
-                    if filename in image_map:
-                        image_file = image_map[filename]
-                        images_to_create.append(
-                            ProductImage(
-                                product_id=product_instance.id,  # Now product_instance.id is guaranteed to exist
-                                image=image_file,
-                                alt_text=f"{product_instance.name} - {filename}",
-                            )
-                        )
 
-            except Exception as e:
-                print(f"Skipping spreadsheet row {index + 2} due to error: {e}")
-                continue
-
-        # 5. BULK CREATE ALL IMAGES AT ONCE
-        if images_to_create:
-            ProductImage.objects.bulk_create(images_to_create, batch_size=500)
-
-        if created_count == 0:
-            raise serializers.ValidationError(
-                "No valid product rows were found in the file."
+            product_instance = Product(
+                name=str(row.get("name", f"Product {index+1}")).strip(),
+                brand=str(row.get("brand", "N/A")).strip(),
+                product_type=str(row.get("product_type", "laptop")).strip(),
+                price=Decimal(row.get("price", "0.00")),
+                quantity=int(row.get("quantity", 1)),
+                vendor=vendor,
+                **product_components,
             )
+            products_to_create.append(product_instance)
 
-        return created_count
+            image_filenames = [
+                name.strip()
+                for name in str(row.get("image", "")).split(",")
+                if name.strip()
+            ]
+            image_links_to_create.append(image_filenames)
+
+        # 4. Bulk Create Products & Images
+        created_products = Product.objects.bulk_create(products_to_create)
+
+        images_to_create = []
+        for product, filenames in zip(created_products, image_links_to_create):
+            for filename in filenames:
+                if filename in image_map:
+                    images_to_create.append(
+                        ProductImage(product=product, image=image_map[filename])
+                    )
+
+        if images_to_create:
+            ProductImage.objects.bulk_create(images_to_create)
+
+        return len(created_products)
 
 
 class ProductRecommendationSerializer(serializers.ModelSerializer):

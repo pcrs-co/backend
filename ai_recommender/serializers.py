@@ -205,37 +205,30 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """
-        Custom logic to handle UserPreference creation.
-        - For LOGGED-IN USERS: Always creates a new preference to build a history.
-        - For ANONYMOUS USERS: Uses update_or_create to reuse the same session preference.
+        --- NEW, CORRECTED LOGIC ---
+        Always creates a new UserPreference for every submission to ensure
+        a clean, distinct record for each recommendation event.
         """
         user = self.context["request"].user
         primary_activity_name = validated_data.pop("primary_activity")
         secondary_activity_names = validated_data.pop("secondary_activities", [])
 
+        # Prepare data for the new preference object
+        preference_data = {"budget": validated_data.get("budget")}
+
         if user.is_authenticated:
-            # --- LOGIC FOR LOGGED-IN USERS ---
-            # Always create a new preference record.
-            preference = UserPreference.objects.create(
-                user=user, budget=validated_data.get("budget")
-            )
+            preference_data["user"] = user
         else:
-            # --- LOGIC FOR ANONYMOUS USERS ---
-            # Reuse the preference for the same session ID.
-            lookup_params = {
-                "session_id": validated_data.get("session_id", uuid.uuid4())
-            }
-            defaults = {"budget": validated_data.get("budget")}
-
-            preference, created = UserPreference.objects.update_or_create(
-                **lookup_params, defaults=defaults
+            # For anonymous users, we still attach the session_id
+            preference_data["session_id"] = validated_data.get(
+                "session_id", uuid.uuid4()
             )
 
-        # Activity linking logic is the same for both cases.
-        # Clear any old activities (important for anonymous users reusing a session)
-        # and link the newly submitted ones.
-        preference.activities.clear()
+        # --- THE KEY CHANGE ---
+        # We now ALWAYS use .create()
+        preference = UserPreference.objects.create(**preference_data)
 
+        # Activity linking logic remains the same
         all_activity_names = [primary_activity_name] + secondary_activity_names
         for activity_name in all_activity_names:
             clean_name = activity_name.strip()
