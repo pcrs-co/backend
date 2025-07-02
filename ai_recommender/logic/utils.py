@@ -1,129 +1,62 @@
-from sympy import Q
-from ..models import CPUBenchmark, GPUBenchmark, DiskBenchmark
-from decimal import Decimal, InvalidOperation
+# ai_recommender/logic/utils.py
+
 import pandas as pd
 import re
-
-
-def compare_requirements(requirements):
-    """Returns the heaviest requirement set based on score logic"""
-    if not requirements.exists():
-        return {
-            "cpu_name": None,
-            "gpu_name": None,
-            "ram": 0,
-            "storage": 0,
-            "cpu_score": 0,
-            "gpu_score": 0,
-        }
-
-    heaviest = {
-        "cpu_name": "",
-        "gpu_name": "",
-        "ram": 0,
-        "storage": 0,
-        "cpu_score": 0,
-        "gpu_score": 0,
-        "notes": "",
-    }
-
-    all_notes = set()
-
-    # Find the single most demanding requirement based on a combined score
-    # This is a more robust way to find the "heaviest" overall spec
-    top_requirement = max(
-        requirements, key=lambda r: (r.cpu_score or 0) + (r.gpu_score or 0)
-    )
-
-    all_apps = ", ".join(set(r.application.name for r in requirements))
-
-    # We now take all specs from this single heaviest requirement
-    heaviest["cpu_name"] = top_requirement.cpu
-    heaviest["gpu_name"] = top_requirement.gpu
-    heaviest["ram"] = top_requirement.ram
-    heaviest["storage_size"] = top_requirement.storage_size
-    heaviest["cpu_score"] = top_requirement.cpu_score
-    heaviest["gpu_score"] = top_requirement.gpu_score
-    heaviest["notes"] = f"These specs are based on the requirements for: {all_apps}."
-
-    # for req in requirements:
-    #     cpu_score = req.cpu_score or get_cpu_score(req.cpu)
-    #     gpu_score = req.gpu_score or get_gpu_score(req.gpu)
-
-    #     # CPU
-    #     if cpu_score > heaviest["cpu_score"]:
-    #         heaviest["cpu_score"] = cpu_score
-
-    #     # GPU
-    #     if gpu_score > heaviest["gpu_score"]:
-    #         heaviest["gpu_score"] = gpu_score
-
-    #     # RAM
-    #     if req.ram > heaviest["ram"]:
-    #         heaviest["ram"] = req.ram
-
-    #     # STORAGE
-    #     storage_type = "SSD" if "ssd" in (req.notes or "").lower() else "HDD"
-    #     is_current_ssd = storage_type == "SSD"
-    #     is_heaviest_ssd = heaviest["storage_type"] == "SSD"
-
-    #     if is_current_ssd and not is_heaviest_ssd:
-    #         heaviest["storage"] = req.storage
-    #         heaviest["storage_type"] = "SSD"
-    #     elif is_current_ssd == is_heaviest_ssd and req.storage > heaviest["storage"]:
-    #         heaviest["storage"] = req.storage
-
-    return heaviest
+import difflib
+from decimal import Decimal, InvalidOperation
+from django.db.models import Q  # This import is only needed here
+from ..models import Activity, CPUBenchmark, GPUBenchmark, DiskBenchmark
 
 
 def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
     """
     Processes a benchmark DataFrame and inserts/updates benchmark records.
-    This version is robust against missing data and respects NOT NULL constraints.
+    This function is fully compatible with the new models that auto-parse 'name'.
     """
     item_type = item_type.lower()
+    # Sanitize column headers for consistency
     df.columns = (
         df.columns.str.strip().str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
     )
 
-    # ++ FIX: Initialize counters at the top ++
-    created_count, updated_count = 0, 0
-    skipped_count = 0
-
+    created_count, updated_count, skipped_count = 0, 0, 0
     col_map = {}
+
     if item_type == "cpu":
         ModelClass = CPUBenchmark
         col_map = {
-            "cpuname": "cpu",
+            "cpuname": "cpu",  # The 'name' field in the model
             "cpumark": "score",
             "rank": "rank",
             "cpuvalue": "value_score",
             "price": "price",
         }
         name_col_key, score_col_key = "cpuname", "cpumark"
+
     elif item_type == "gpu":
         ModelClass = GPUBenchmark
         col_map = {
-            "videocardname": "gpu",
+            "videocardname": "gpu",  # The 'name' field in the model
             "g3dmark": "score",
             "rank": "rank",
             "videocardvalue": "value_score",
             "price": "price",
         }
         name_col_key, score_col_key = "videocardname", "g3dmark"
+
     elif item_type == "disk":
         ModelClass = DiskBenchmark
         col_map = {
             "drivename": "drive_name",
-            "diskrating": "score",  # Matches your "diskratin" column
+            "diskrating": "score",
             "size": "size_tb",
             "rank": "rank",
-            "drivevalue": "value_score",  # Matches your "drivevalue" column
+            "drivevalue": "value_score",
             "price": "price",
         }
         name_col_key, score_col_key = "drivename", "diskrating"
 
-    if not col_map:
+    else:
         raise ValueError("Invalid item_type. Must be 'cpu', 'gpu', or 'disk'.")
 
     required_cols = {name_col_key, score_col_key}
@@ -133,64 +66,59 @@ def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
             f"Missing required columns for type '{item_type}': {missing}. Found: {list(df.columns)}"
         )
 
+    # Use a list to bulk_create/update later for efficiency
+    objects_to_update = []
+    objects_to_create = []
+
     for index, row in df.iterrows():
         component_name = row.get(name_col_key)
         score_val = row.get(score_col_key)
 
-        # ++ ROBUSTNESS: Skip rows with no name or no score ++
-        if pd.isna(component_name) or pd.isna(score_val):
-            print(
-                f"  - WARNING: Skipping row {index + 2} due to missing name or score."
-            )
+        if (
+            pd.isna(component_name)
+            or pd.isna(score_val)
+            or not str(component_name).strip()
+        ):
             skipped_count += 1
             continue
 
         component_name = str(component_name).strip()
         defaults = {}
 
-        # --- Process all other columns ---
         for standardized_name, model_field in col_map.items():
             value = row.get(standardized_name)
             if pd.isna(value):
-                # We already handled required fields, so others can be None
                 defaults[model_field] = None
                 continue
 
             try:
                 if model_field in ["score", "rank"]:
-                    # Clean and convert to integer
                     cleaned_val = re.sub(r"[^\d]", "", str(value))
-                    if cleaned_val:
-                        defaults[model_field] = int(cleaned_val)
-                    else:
-                        # If score is empty after cleaning, it's invalid.
-                        if model_field == "score":
-                            raise ValueError("Score became empty after cleaning.")
-                        defaults[model_field] = None
+                    defaults[model_field] = int(cleaned_val) if cleaned_val else None
                 elif model_field in ["value_score", "size_tb"]:
                     cleaned_val = re.sub(r"[^\d.]", "", str(value))
                     defaults[model_field] = float(cleaned_val) if cleaned_val else None
                 elif model_field == "price":
                     price_str = re.sub(r"[^\d.]", "", str(value))
                     defaults[model_field] = Decimal(price_str) if price_str else None
+                elif model_field == "name" or model_field == "drive_name":
+                    defaults[model_field] = str(value).strip()
 
             except (ValueError, TypeError, InvalidOperation) as e:
-                # If a non-essential field fails to parse, we can live with it being null
-                print(
-                    f"  - WARNING: Could not parse field '{model_field}' for '{component_name}' on row {index + 2}. Value: '{value}'. Setting to NULL. Error: {e}"
-                )
                 defaults[model_field] = None
+                print(
+                    f"Warning: Could not parse field '{model_field}' for '{component_name}'. Setting to NULL."
+                )
 
-        # If a score couldn't be parsed, `defaults` won't have it. We must skip.
-        if "score" not in defaults or defaults["score"] is None:
-            print(
-                f"  - WARNING: Skipping row {index + 2} for '{component_name}' because score could not be parsed."
-            )
+        if defaults.get("score") is None:
             skipped_count += 1
             continue
 
-        # Use update_or_create to insert or update the record
-        lookup = {col_map[name_col_key]: component_name}
+        # Using update_or_create is fine for smaller datasets and ensures the custom .save() is called.
+        # This is the simplest and most robust approach.
+        lookup_key_for_model = col_map[name_col_key]
+        lookup = {lookup_key_for_model: component_name}
+
         obj, was_created = ModelClass.objects.update_or_create(
             **lookup, defaults=defaults
         )
@@ -200,7 +128,6 @@ def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
         else:
             updated_count += 1
 
-    # Add skipped count to the results
     return {
         "created": created_count,
         "updated": updated_count,
@@ -208,66 +135,162 @@ def process_benchmark_dataframe(df: pd.DataFrame, item_type: str):
     }
 
 
-def clean_and_convert_to_int(value) -> int:
+def _find_match_for_single_component(requirement_str: str, benchmark_model):
     """
-    Cleans a string to extract an integer, handling common cases like '8 GB'.
-    Returns 0 if conversion is not possible.
+    (HELPER) Finds the best single benchmark OBJECT for a single requirement string.
+    This is the core logic engine that matches one component name.
     """
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        # Find the first sequence of digits in the string
-        match = re.search(r"\d+", value)
-        if match:
-            try:
-                return int(match.group(0))
-            except (ValueError, TypeError):
-                return 0
-    # Handle float or other numeric types if necessary
-    if isinstance(value, float):
-        return int(value)
+    if not requirement_str:
+        return None
+    clean_str = requirement_str.strip().lower()
 
-    return 0
+    # Strategy 1: For CPUs, check for clock speed first as it's a strong indicator.
+    if benchmark_model == CPUBenchmark:
+        speed_match = re.search(r"(\d\.?\d*)\s*ghz", clean_str)
+        if speed_match:
+            speed = float(speed_match.group(1))
+            # Find the best-scoring CPU that meets or exceeds the specified speed
+            candidates = CPUBenchmark.objects.filter(clock_speed_ghz__gte=speed)
+            if candidates.exists():
+                return candidates.order_by("-score").first()
+
+    # Strategy 2: Fuzzy String Match against the `model_name` for all component types.
+    all_benchmarks = benchmark_model.objects.all()
+    if not all_benchmarks:
+        return None
+
+    best_similarity, best_matches = 0.0, []
+    # Use the structured `model_name` for matching, not the raw `name`.
+    for bench in all_benchmarks:
+        similarity = difflib.SequenceMatcher(
+            None, clean_str, bench.model_name.lower()
+        ).ratio()
+        if similarity > best_similarity:
+            best_similarity, best_matches = similarity, [bench]
+        elif similarity == best_similarity:
+            best_matches.append(bench)
+
+    SIMILARITY_THRESHOLD = 0.7
+    if best_similarity < SIMILARITY_THRESHOLD:
+        return None
+
+    # From the best string matches, return the one with the highest performance score.
+    return max(best_matches, key=lambda b: b.score)
 
 
-def find_best_benchmark(raw_name: str, component_type: str):
+# --- NEW HELPER FUNCTIONS ---
+_model = None  # Global cache for the sentence transformer model
+
+
+def get_sentence_model():
+    """Lazily loads and caches the SentenceTransformer model to save memory."""
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+
+        print("Loading Sentence-BERT model for matching...")
+        _model = SentenceTransformer("all-mpnet-base-v2")
+    return _model
+
+
+def _find_match_with_embeddings(requirement_str: str, benchmark_model):
     """
-    Takes a raw string from an AI (e.g., "Intel i7-9700K or AMD Ryzen 7 2700X")
-    and finds the best matching benchmark from the database.
+    (HELPER) Finds the best benchmark OBJECT for a single requirement string
+    using pre-computed vector embeddings.
+    """
+    if not requirement_str:
+        return None
 
-    Args:
-        raw_name: The string from the AI.
-        component_type: 'cpu' or 'gpu'.
+    model = get_sentence_model()
 
-    Returns:
-        The best matching benchmark model instance, or None if no match is found.
+    # 1. Get all pre-computed embeddings from the database for the given model type
+    benchmarks_with_embeddings = list(
+        benchmark_model.objects.exclude(embedding__isnull=True)
+    )
+    if not benchmarks_with_embeddings:
+        print(
+            f"WARNING: No pre-computed embeddings found for {benchmark_model.__name__}. Matching will fail."
+        )
+        return None
+
+    corpus_embeddings = np.array(
+        [json.loads(b.embedding) for b in benchmarks_with_embeddings]
+    )
+
+    # 2. Create an embedding for the new requirement string
+    query_embedding = model.encode(requirement_str)
+
+    # 3. Compute cosine similarities between the query and all database items
+    # This is extremely fast with numpy/pytorch
+    cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+
+    # 4. Find the index of the highest score
+    best_match_index = np.argmax(cos_scores)
+
+    # Check if the match is good enough
+    SIMILARITY_THRESHOLD = 0.5  # You can tune this
+    if cos_scores[best_match_index] < SIMILARITY_THRESHOLD:
+        return None
+
+    # 5. Return the corresponding benchmark object
+    return benchmarks_with_embeddings[best_match_index]
+
+
+# --- THIS REPLACES YOUR OLD `find_best_benchmark_object` ---
+def find_best_benchmark_object(raw_name: str, component_type: str):
+    """
+    Takes a raw string from the AI (e.g., "Intel i7-9700K or AMD Ryzen 7 2700X")
+    and finds the single best matching benchmark OBJECT from the database using embeddings.
     """
     if not raw_name or raw_name.lower() in ["none", "not specified", "n/a"]:
         return None
 
-    # 1. Split the raw string into a list of potential candidates
-    # We split by "or", "/", and "," and then clean up each part.
     candidates = re.split(r"\s+or\s+|\s*/\s*|,", raw_name, flags=re.IGNORECASE)
     cleaned_candidates = [c.strip() for c in candidates if c.strip()]
 
     if not cleaned_candidates:
         return None
 
-    # 2. Build a dynamic query to find all possible matches
-    ModelClass = CPUBenchmark if component_type == "cpu" else GPUBenchmark
-    query = Q()
+    ModelClass = CPUBenchmark if component_type.lower() == "cpu" else GPUBenchmark
+
+    found_benchmarks = []
     for candidate in cleaned_candidates:
-        # The query will be: Q(cpu__icontains='Intel Core i7-9700K') | Q(cpu__icontains='AMD Ryzen 7 2700X')
-        query |= Q(**{f"{component_type}__icontains": candidate})
+        match = _find_match_with_embeddings(candidate, ModelClass)
+        if match:
+            found_benchmarks.append(match)
 
-    # 3. Execute the query to get all potential benchmarks
-    found_benchmarks = ModelClass.objects.filter(query)
-
-    if not found_benchmarks.exists():
+    if not found_benchmarks:
         return None
 
-    # 4. Evaluate and select the best one (based on the highest score)
-    # You could change `score` to `value_score` to prioritize economy
-    best_match = max(found_benchmarks, key=lambda bench: bench.score)
+    # From all the valid matches, select the one with the highest performance score.
+    return max(found_benchmarks, key=lambda bench: bench.score)
 
-    return best_match
+
+def find_similar_activities(activity_name):
+    """
+    Utility function to find and print activities similar to a given one.
+    """
+    try:
+        target_activity = Activity.objects.get(name__iexact=activity_name)
+    except Activity.DoesNotExist:
+        print(f"Activity '{activity_name}' not found.")
+        return
+
+    all_other_activities = Activity.objects.exclude(pk=target_activity.pk)
+
+    similarities = []
+    for other in all_other_activities:
+        similarity_data = target_activity.get_similarity_with(other)
+        similarities.append((other.name, similarity_data))
+
+    # Sort by the combined score, highest first
+    similarities.sort(key=lambda x: x[1]["combined_score"], reverse=True)
+
+    print(f"\nActivities most similar to '{target_activity.name}':")
+    for name, data in similarities[:5]:  # Print top 5
+        print(
+            f"  - {name}: "
+            f"Combined Score: {data['combined_score']:.3f} "
+            f"(Apps: {data['jaccard_similarity']:.3f}, "
+            f"Reqs: {data['requirement_similarity']:.3f})"
+        )

@@ -1,72 +1,11 @@
 import difflib
 from ai_recommender.models import CPUBenchmark, GPUBenchmark
+from ai_recommender.logic.utils import find_best_benchmark_object
 from login_and_register.models import *
 from django.db import models
 
 
-# +++ REUSABLE HELPER FUNCTION FOR SMART MATCHING +++
-def find_best_benchmark_match(target_name: str, benchmark_model):
-    """
-    Finds the best benchmark record by matching against the correct field ('cpu' or 'gpu')
-    and using the performance score as a tie-breaker.
-
-    Args:
-        target_name (str): The component name from the product (e.g., "Intel Core i7-13700K").
-        benchmark_model: The Django model to search (CPUBenchmark or GPUBenchmark).
-
-    Returns:
-        The best matching benchmark object or None.
-    """
-    if not target_name:
-        return None
-
-    all_benchmarks = benchmark_model.objects.all()
-    if not all_benchmarks:
-        return None
-
-    # --- KEY CHANGE: Determine the correct field name ---
-    if benchmark_model == CPUBenchmark:
-        name_field = "cpu"
-    elif benchmark_model == GPUBenchmark:
-        name_field = "gpu"
-    else:
-        # Safeguard if you add more benchmark types later
-        raise TypeError(f"Unsupported benchmark model: {benchmark_model.__name__}")
-
-    best_similarity = 0.0
-    best_matches = []
-
-    # Step 1: Find the highest similarity ratio
-    for bench in all_benchmarks:
-        # Use getattr() to dynamically access the correct field ('cpu' or 'gpu')
-        benchmark_name = getattr(bench, name_field)
-        similarity = difflib.SequenceMatcher(
-            None, target_name.lower(), benchmark_name.lower()
-        ).ratio()
-
-        if similarity > best_similarity:
-            best_similarity = similarity
-            best_matches = [bench]
-        elif similarity == best_similarity:
-            best_matches.append(bench)
-
-    # Step 2: Avoid matching completely unrelated items
-    SIMILARITY_THRESHOLD = 0.7
-    if best_similarity < SIMILARITY_THRESHOLD:
-        print(
-            f"No good match for '{target_name}'. Highest similarity "
-            f"({best_similarity:.2f}) is below the {SIMILARITY_THRESHOLD} threshold."
-        )
-        return None
-
-    # Step 3: From the best matches, pick the one with the highest score as a tie-breaker
-    if not best_matches:
-        return None
-
-    winner = max(best_matches, key=lambda b: b.score)
-    return winner
-
-
+### --- THE FINAL, CLEANED Product MODEL --- ###
 class Product(models.Model):
     VENDOR_TYPES = [
         ("laptop", "Laptop"),
@@ -76,12 +15,14 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     brand = models.CharField(max_length=255)
     product_type = models.CharField(max_length=50, choices=VENDOR_TYPES)
-    price = models.DecimalField(max_digits=65, decimal_places=2, null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
     pending_quantity = models.PositiveIntegerField(default=0)
     vendor = models.ForeignKey(
         Vendor, related_name="products", on_delete=models.CASCADE
     )
+
+    # All the ForeignKey relations to component models
     processor = models.ForeignKey(
         "Processor",
         related_name="products",
@@ -159,57 +100,51 @@ class Product(models.Model):
         null=True,
         blank=True,
     )
-    # Example addition to Processor and Graphic
+
+    # The scores that will be automatically populated
     cpu_score = models.IntegerField(blank=True, null=True)
     gpu_score = models.IntegerField(blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
-    # +++ FINAL, CORRECTED SAVE METHOD +++
     def save(self, *args, **kwargs):
         """
-        Overrides the default save method to populate cpu_score and gpu_score.
-        This version correctly uses the 'data_received' field from components
-        and matches against the specific 'cpu'/'gpu' fields in the benchmark models.
+        Overrides the default save method to populate cpu_score and gpu_score
+        by calling the centralized benchmark matching function.
         """
         # --- CPU Score Lookup ---
-        # Checks the processor's 'data_received' field, which is set during bulk upload.
         if self.processor and self.processor.data_received:
-            best_match = find_best_benchmark_match(
-                self.processor.data_received, CPUBenchmark
-            )
+            # We call the single, authoritative function from the utils module
+            best_match = find_best_benchmark_object(self.processor.data_received, "cpu")
             if best_match:
                 self.cpu_score = best_match.score
                 print(
-                    f"Success: Matched CPU '{self.processor.data_received}' to benchmark '{best_match.cpu}' (Score: {self.cpu_score})"
+                    f"Success: Matched CPU '{self.processor.data_received}' to '{best_match.name}' (Score: {self.cpu_score})"
                 )
             else:
-                self.cpu_score = None  # Clear score if no match is found
+                self.cpu_score = None
                 print(
-                    f"Warning: Could not find a benchmark match for CPU '{self.processor.data_received}'"
+                    f"Warning: No benchmark match for CPU '{self.processor.data_received}'"
                 )
         else:
-            # If there's no processor or it has no data, score must be null.
             self.cpu_score = None
 
         # --- GPU Score Lookup ---
-        # Repeats the same robust logic for the GPU.
         if self.graphic and self.graphic.data_received:
-            best_match = find_best_benchmark_match(
-                self.graphic.data_received, GPUBenchmark
-            )
+            # Re-use the same authoritative function for the GPU
+            best_match = find_best_benchmark_object(self.graphic.data_received, "gpu")
             if best_match:
                 self.gpu_score = best_match.score
                 print(
-                    f"Success: Matched GPU '{self.graphic.data_received}' to benchmark '{best_match.gpu}' (Score: {self.gpu_score})"
+                    f"Success: Matched GPU '{self.graphic.data_received}' to '{best_match.name}' (Score: {self.gpu_score})"
                 )
             else:
-                self.gpu_score = None  # Clear score if no match is found
+                self.gpu_score = None
                 print(
-                    f"Warning: Could not find a benchmark match for GPU '{self.graphic.data_received}'"
+                    f"Warning: No benchmark match for GPU '{self.graphic.data_received}'"
                 )
         else:
-            # If there's no graphic card or it has no data, score must be null.
             self.gpu_score = None
 
         super().save(*args, **kwargs)

@@ -3,6 +3,7 @@ from login_and_register.models import *
 from django.db.models import Q
 from django.db import models
 from .logic.web_extractor import get_structured_component
+from django.db.models import Avg
 import difflib
 import uuid
 
@@ -11,6 +12,65 @@ class Activity(models.Model):
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def get_application_set(self):
+        """Helper to get a set of primary keys for this activity's apps."""
+        return set(self.applications.values_list("pk", flat=True))
+
+    def get_similarity_with(self, other_activity):
+        """
+        Calculates a similarity score between this activity and another.
+
+        Returns a dictionary containing different similarity metrics.
+        """
+        if not isinstance(other_activity, Activity):
+            raise TypeError("Can only compare with another Activity instance.")
+
+        # --- Metric 1: Jaccard Similarity based on shared applications ---
+        my_apps = self.get_application_set()
+        other_apps = other_activity.get_application_set()
+
+        if not my_apps or not other_apps:
+            jaccard_similarity = 0.0
+        else:
+            intersection_size = len(my_apps.intersection(other_apps))
+            union_size = len(my_apps.union(other_apps))
+            jaccard_similarity = (
+                intersection_size / union_size if union_size > 0 else 0.0
+            )
+
+        # --- Metric 2: Similarity based on average system requirements ---
+        # This calculates an "average performance fingerprint" for an activity.
+        my_avg_scores = self.applications.aggregate(
+            avg_cpu=Avg("requirements__cpu_score"),
+            avg_gpu=Avg("requirements__gpu_score"),
+        )
+        other_avg_scores = other_activity.applications.aggregate(
+            avg_cpu=Avg("requirements__cpu_score"),
+            avg_gpu=Avg("requirements__gpu_score"),
+        )
+
+        # Calculate a simple distance (lower is more similar). We normalize by the max.
+        # Avoid division by zero.
+        cpu_diff = 0
+        if my_avg_scores["avg_cpu"] and other_avg_scores["avg_cpu"]:
+            diff = abs(my_avg_scores["avg_cpu"] - other_avg_scores["avg_cpu"])
+            # Normalize the difference to be between 0 and 1
+            cpu_diff = diff / max(my_avg_scores["avg_cpu"], other_avg_scores["avg_cpu"])
+
+        # We can create a combined score, weighting Jaccard more heavily.
+        # A simple approach: 70% Jaccard, 30% Requirement similarity
+        # (Note: Requirement similarity is 1 - normalized_difference)
+        requirement_similarity = 1 - cpu_diff
+        combined_score = (0.7 * jaccard_similarity) + (0.3 * requirement_similarity)
+
+        return {
+            "jaccard_similarity": round(jaccard_similarity, 3),
+            "requirement_similarity": round(requirement_similarity, 3),
+            "combined_score": round(combined_score, 3),
+            "my_avg_cpu": my_avg_scores["avg_cpu"],
+            "other_avg_cpu": other_avg_scores["avg_cpu"],
+        }
 
 
 class Application(models.Model):
@@ -30,24 +90,89 @@ class Application(models.Model):
 
 
 class CPUBenchmark(models.Model):
-    cpu = models.CharField(max_length=255, unique=True)
+    cpu = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="The full, original name from the benchmark source.",
+    )
+
+    # Structured data fields that can be null if info is not available
+    model_name = models.CharField(
+        max_length=200,
+        db_index=True,
+        help_text="The clean model name, e.g., 'Intel Core i9-9960X'",
+    )
+    clock_speed_ghz = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="The clock speed in GHz, if available.",
+    )
     score = models.IntegerField()
     rank = models.IntegerField(null=True, blank=True)
     value_score = models.FloatField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    embedding = models.TextField(
+        blank=True, null=True, help_text="JSON-serialized 768-dim vector embedding."
+    )
+
+    def save(self, *args, **kwargs):
+        # --- UNCOMMENT AND FIX ---
+        if not self.model_name:
+            # CORRECT: Use self.cpu, not self.name
+            clean_name = self.cpu.strip()
+            if "@" in clean_name:
+                parts = clean_name.split("@", 1)
+                self.model_name = parts[0].strip()
+                speed_match = re.search(r"(\d+\.?\d*)\s*GHz", parts[1], re.IGNORECASE)
+                if speed_match:
+                    self.clock_speed_ghz = float(speed_match.group(1))
+                else:
+                    self.clock_speed_ghz = None
+            else:
+                self.model_name = clean_name
+                self.clock_speed_ghz = None
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.cpu} (Score: {self.score})"
+        return self.cpu
 
 
 class GPUBenchmark(models.Model):
-    gpu = models.CharField(max_length=255, unique=True)
+    gpu = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="The full, original name from the benchmark source, e.g., 'NVIDIA GeForce RTX 4090'",
+    )
+    model_name = models.CharField(
+        max_length=200,
+        db_index=True,
+        help_text="The clean model name, e.g., 'GeForce RTX 4090'",
+    )
     score = models.IntegerField()
     rank = models.IntegerField(null=True, blank=True)
     value_score = models.FloatField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    embedding = models.TextField(
+        blank=True, null=True, help_text="JSON-serialized 768-dim vector embedding."
+    )
+
+    def save(self, *args, **kwargs):
+        # --- UNCOMMENT AND FIX ---
+        if not self.model_name:
+            # CORRECT: Use self.gpu, not self.name
+            clean_name = self.gpu.strip()
+            prefixes_to_remove = ["NVIDIA", "AMD", "Intel"]
+            parsed_model_name = clean_name
+            for prefix in prefixes_to_remove:
+                if parsed_model_name.lower().startswith(prefix.lower()):
+                    parsed_model_name = parsed_model_name[len(prefix) :].strip()
+            self.model_name = parsed_model_name
+        super().save(*args, **kwargs)
 
     def __str__(self):
+        # Using self.gpu is better here as it's the full, original name
         return f"{self.gpu} (Score: {self.score})"
 
 
@@ -61,59 +186,6 @@ class DiskBenchmark(models.Model):
 
     def __str__(self):
         return f"{self.drive_name} (Score: {self.score})"
-
-
-# +++ NEW HELPER FUNCTION FOR SMART MATCHING +++
-def find_best_benchmark_match(target_name: str, benchmark_model):
-    """
-    Finds the best benchmark record by first finding the highest string similarity,
-    and then using the performance score as a tie-breaker.
-
-    Args:
-        target_name (str): The name from the AI (e.g., "Intel Core i7-8700K").
-        benchmark_model: The Django model to search (CPUBenchmark or GPUBenchmark).
-
-    Returns:
-        The best matching benchmark object or None.
-    """
-    if not target_name:
-        return None
-
-    all_benchmarks = benchmark_model.objects.all()
-    if not all_benchmarks:
-        return None
-
-    best_similarity = 0.0
-    best_matches = []
-
-    # Step 1: Find the highest similarity ratio
-    for bench in all_benchmarks:
-        # The name field is either 'cpu' or 'gpu'
-        name_field = "cpu" if benchmark_model == CPUBenchmark else "gpu"
-        similarity = difflib.SequenceMatcher(
-            None, target_name.lower(), getattr(bench, name_field).lower()
-        ).ratio()
-
-        if similarity > best_similarity:
-            best_similarity = similarity
-            best_matches = [bench]
-        elif similarity == best_similarity:
-            best_matches.append(bench)
-
-    # Step 2: If the best similarity is reasonably high, proceed
-    SIMILARITY_THRESHOLD = 0.7  # Avoids matching completely unrelated things
-    if best_similarity < SIMILARITY_THRESHOLD:
-        print(
-            f"No good match found for '{target_name}'. Highest similarity was {best_similarity:.2f}, which is below threshold."
-        )
-        return None
-
-    # Step 3: From the best matches, pick the one with the highest score as a tie-breaker
-    if not best_matches:
-        return None
-
-    winner = max(best_matches, key=lambda b: b.score)
-    return winner
 
 
 # +++ OVERHAULED ApplicationSystemRequirement MODEL +++
@@ -139,93 +211,59 @@ class ApplicationSystemRequirement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
+    ### REFACTORED AND SIMPLIFIED METHOD ###
     def _get_benchmark_score(self, requirement_name, benchmark_model, component_type):
+        from .logic.utils import find_best_benchmark_object
+
         """
-        Finds a benchmark score by splitting a requirement string by 'or', '/', or ',',
-        finding the best match for each part, and returning the highest score found.
+        Finds the best benchmark score by calling the canonical lookup function.
+        This is now a simple wrapper.
         """
-        if not requirement_name or not requirement_name.strip():
-            return None
+        print(f"--- Analyzing {component_type} requirement: '{requirement_name}' ---")
 
-        # +++ THE CORRECTED REGEX +++
-        # This regex looks for:
-        # \s+or\s+  -> The whole word "or" surrounded by one or more spaces.
-        # |          -> OR
-        # \s*/\s*    -> A forward slash, with optional spaces around it.
-        # |          -> OR
-        # \s*,\s*    -> A comma, with optional spaces around it.
-        # The re.IGNORECASE flag handles "Or", "OR", etc.
-        separators = r"\s+or\s+|\s*/\s*|\s*,\s*"
-        component_parts = re.split(separators, requirement_name, flags=re.IGNORECASE)
-        # +++ END OF CORRECTION +++
+        # The new function handles splitting and finding the best match all in one go!
+        best_match_object = find_best_benchmark_object(requirement_name, component_type)
 
-        # Filter out any empty strings that might result from splitting
-        component_parts = [part for part in component_parts if part and part.strip()]
-
-        found_scores = []
-        print(f"Splitting '{requirement_name}' into: {component_parts}")
-
-        for part in component_parts:
-            clean_part = part.strip()
-            if not clean_part:
-                continue
-
-            # This part of your logic is already good!
-            best_match_obj = find_best_benchmark_match(clean_part, benchmark_model)
-            if best_match_obj:
-                # The name field is either 'cpu' or 'gpu'
-                name_field = "cpu" if benchmark_model == CPUBenchmark else "gpu"
-                print(
-                    f"  -> Match found for part '{clean_part}': '{getattr(best_match_obj, name_field)}' with score {best_match_obj.score}"
-                )
-                found_scores.append(best_match_obj.score)
-            else:
-                print(f"  -> No match found for part '{clean_part}'.")
-
-        if found_scores:
-            highest_score = max(found_scores)
+        if best_match_object:
+            score = best_match_object.score
             print(
-                f"Found scores {found_scores}. Selecting the highest: {highest_score}"
+                f"--> Match found: '{best_match_object.name}'. Selected score: {score}"
             )
-            return highest_score
-
-        print(f"CRITICAL: Could not find a score for any part of '{requirement_name}'.")
-        return None
+            return score
+        else:
+            print(f"CRITICAL: Could not determine a score for '{requirement_name}'.")
+            return None
 
     def save(self, *args, **kwargs):
         """
-        Orchestrates finding scores for CPU and GPU. This part remains unchanged
-        as it correctly calls the helper function whose logic we just updated.
+        Orchestrates finding scores for CPU and GPU using the new,
+        smarter embedding-based matching function.
         """
+        print(f"--- Analyzing cpu requirement: '{self.cpu}' ---")
         if self.cpu and self.cpu_score is None:
-            self.cpu_score = self._get_benchmark_score(self.cpu, CPUBenchmark, "CPU")
+            # Use the new, imported function
+            best_cpu_match = find_best_benchmark_object(self.cpu, "cpu")
+            if best_cpu_match:
+                self.cpu_score = best_cpu_match.score
+                print(
+                    f"  -> Match found for CPU '{self.cpu}': '{best_cpu_match.cpu}' with score {best_cpu_match.score}"
+                )
+            else:
+                print(f"  -> CRITICAL: No CPU match found for '{self.cpu}'.")
 
+        print(f"--- Analyzing gpu requirement: '{self.gpu}' ---")
         if self.gpu and self.gpu_score is None:
-            self.gpu_score = self._get_benchmark_score(self.gpu, GPUBenchmark, "GPU")
-
-        # Final check to prevent DB error if everything failed
-        if self.cpu_score is None or self.gpu_score is None:
-            print(
-                f"WARNING: Could not determine a score for CPU or GPU for '{self.application.name} ({self.type})'. Saving with null values."
-            )
+            # Use the new, imported function
+            best_gpu_match = find_best_benchmark_object(self.gpu, "gpu")
+            if best_gpu_match:
+                self.gpu_score = best_gpu_match.score
+                print(
+                    f"  -> Match found for GPU '{self.gpu}': '{best_gpu_match.gpu}' with score {best_gpu_match.score}"
+                )
+            else:
+                print(f"  -> CRITICAL: No GPU match found for '{self.gpu}'.")
 
         super().save(*args, **kwargs)
-
-    # def save(self, *args, **kwargs):
-    #     """Orchestrates finding scores for CPU and GPU using the new structured method."""
-    #     if self.cpu and self.cpu_score is None:
-    #         # ++ USE THE NEW SMARTER FUNCTION ++
-    #         best_match_obj = get_structured_component(self.cpu, "CPU")
-    #         if best_match_obj:
-    #             self.cpu_score = best_match_obj.score
-
-    #     if self.gpu and self.gpu_score is None:
-    #         # ++ USE THE NEW SMARTER FUNCTION ++
-    #         best_match_obj = get_structured_component(self.gpu, "GPU")
-    #         if best_match_obj:
-    #             self.gpu_score = best_match_obj.score
-
-    #     super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.application.name} ({self.type})"
@@ -315,52 +353,195 @@ class RequirementMatch(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
 
 
-class AdminCorrectionLog(models.Model):
-    match = models.ForeignKey(RequirementMatch, on_delete=models.CASCADE)
-    corrected_cpu = models.ForeignKey(
-        CPUBenchmark,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="corrected_cpu",
-    )
-    corrected_gpu = models.ForeignKey(
-        GPUBenchmark,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="corrected_gpu",
-    )
-    reason = models.TextField(blank=True)
-    corrected_by = models.ForeignKey(
-        CustomUser, null=True, blank=True, on_delete=models.SET_NULL
-    )
-    corrected_at = models.DateTimeField(auto_now_add=True)
-    modified_at = models.DateTimeField(auto_now=True)
-
-
-class RequirementExtractionLog(models.Model):
-    application = models.ForeignKey(Application, on_delete=models.CASCADE)
-    source_text = models.TextField()
-    extracted_json = models.JSONField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    method = models.CharField(max_length=50, default="regex")
-    confidence = models.FloatField(null=True)
-    reviewed = models.BooleanField(default=False)
-
-
-class ApplicationExtractionLog(models.Model):
-    activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
-    source_text = models.TextField()
-    extracted_apps = models.JSONField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    method = models.CharField(max_length=50)
-    confidence = models.FloatField()
-    reviewed = models.BooleanField(default=False)
-
-
 class ScrapingLog(models.Model):
     activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
     source = models.CharField(max_length=50)
     app_count = models.PositiveIntegerField()
     timestamp = models.DateTimeField()
+
+
+class ActivitySimilarity(models.Model):
+    """
+    Stores the pre-calculated similarity score between two activities.
+    This makes lookups for related activities instantaneous.
+    """
+
+    source_activity = models.ForeignKey(
+        Activity, on_delete=models.CASCADE, related_name="similarity_sources"
+    )
+    target_activity = models.ForeignKey(
+        Activity, on_delete=models.CASCADE, related_name="similarity_targets"
+    )
+
+    # We store two types of similarity for more nuanced recommendations
+    jaccard_similarity = models.FloatField(
+        help_text="Similarity based on common applications (0 to 1)"
+    )
+    requirement_similarity = models.FloatField(
+        help_text="Similarity based on system requirement scores (0 to 1)"
+    )
+
+    # A combined score for general-purpose ranking
+    combined_score = models.FloatField(
+        db_index=True, help_text="Weighted average of both similarities"
+    )
+
+    class Meta:
+        unique_together = ("source_activity", "target_activity")
+        ordering = ["-combined_score"]
+
+    def __str__(self):
+        return f"{self.source_activity.name} -> {self.target_activity.name}: {self.combined_score:.2f}"
+
+
+class RecommendationLog(models.Model):
+    """
+    Records every recommendation generated by the system, creating a history
+    of the AI's decisions for review and learning.
+    """
+
+    # Link to the user/session that triggered this
+    source_preference = models.ForeignKey(
+        UserPreference, on_delete=models.SET_NULL, null=True, blank=True
+    )
+
+    # The final recommendation that was generated
+    final_recommendation = models.ForeignKey(
+        RecommendationSpecification, on_delete=models.CASCADE
+    )
+
+    # A snapshot of the key inputs at the time of recommendation
+    activities_json = models.JSONField(help_text="Snapshot of activity names")
+    applications_json = models.JSONField(
+        help_text="Snapshot of application data that was considered"
+    )
+
+    # The crucial field for feedback
+    RATING_CHOICES = [
+        (3, "Excellent"),  # AI was perfect
+        (2, "Good"),  # Mostly correct, minor issues
+        (1, "Poor"),  # Logically derived but not user-friendly or practical
+        (0, "Incorrect"),  # The recommendation was just wrong
+    ]
+    admin_rating = models.IntegerField(
+        choices=RATING_CHOICES, null=True, blank=True, db_index=True
+    )
+    admin_notes = models.TextField(
+        blank=True,
+        help_text="Why this rating was given, e.g., 'Recommended a Pentium 4, which is too old.'",
+    )
+
+    reviewed_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Log for Rec {self.final_recommendation_id} at {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class ApplicationExtractionLog(models.Model):
+    # This logs the LLM's raw output for an activity
+    activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
+    raw_ai_response = models.TextField()  # More descriptive name
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RequirementExtractionLog(models.Model):
+    # This logs the specific requirements extracted for ONE application
+    application = models.ForeignKey(Application, on_delete=models.CASCADE)
+    # Link back to the broader AI call
+    source_extraction_log = models.ForeignKey(
+        ApplicationExtractionLog, on_delete=models.CASCADE, null=True, blank=True
+    )
+    extracted_cpu = models.CharField(max_length=255, null=True, blank=True)
+    extracted_gpu = models.CharField(max_length=255, null=True, blank=True)
+    extracted_ram = models.IntegerField(null=True, blank=True)
+    extracted_storage = models.IntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    # This is the raw text that was processed to extract these requirements
+    raw_text = models.TextField(
+        null=True,
+        blank=True,
+        help_text="The raw text that was processed to extract these requirements.",
+    )
+    # This is the timestamp of when the extraction was performed
+    # It helps track when the requirements were last updated
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class AdminCorrectionLog(models.Model):
+    # This is your KEY model for Level 1 Feedback
+    # It corrects a specific component match
+    requirement_log = models.ForeignKey(
+        RequirementExtractionLog,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="correction_logs",
+    )
+
+    # What component was being corrected?
+    component_type = models.CharField(
+        max_length=10,
+        choices=[("cpu", "CPU"), ("gpu", "GPU"), ("disk", "Disk")],
+        help_text="The type of component being corrected (CPU, GPU, Disk).",
+        null=True,
+        blank=True,
+    )
+    original_text = models.CharField(
+        max_length=255,
+        help_text="The text the AI tried to match.",
+        null=True,
+        blank=True,
+    )
+
+    # What the AI matched it to (can be null if it failed)
+    original_match = models.ForeignKey(
+        CPUBenchmark,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="original_cpu_matches",
+    )
+    # NOTE: You'll need to add a similar FK for GPU if you correct both at once, but one at a time is simpler.
+
+    # What the admin corrected it to
+    corrected_match = models.ForeignKey(
+        CPUBenchmark,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="corrected_cpu_matches",
+    )
+
+    reason = models.TextField(blank=True)
+    corrected_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+# --- THIS IS THE NEW MODEL FOR LEVEL 2 FEEDBACK ---
+# It's a simplified version of what I proposed before, to fit your structure.
+class RecommendationFeedback(models.Model):
+    """
+    Grades the final output of a recommendation. This is the 'user-friendliness' check.
+    """
+
+    recommendation = models.OneToOneField(
+        RecommendationSpecification, on_delete=models.CASCADE, primary_key=True
+    )
+
+    RATING_CHOICES = [(3, "Excellent"), (2, "Good"), (1, "Poor"), (0, "Incorrect")]
+    admin_rating = models.IntegerField(choices=RATING_CHOICES, null=True, blank=True)
+    admin_notes = models.TextField(blank=True, help_text="Why this rating was given.")
+
+    reviewed_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Feedback for Rec #{self.recommendation.id}"

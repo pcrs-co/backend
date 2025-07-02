@@ -1,13 +1,19 @@
 # ai_recommender/logic/ai_discovery.py
 
-from ..models import Activity, Application, ApplicationSystemRequirement
+from ..models import (
+    Activity,
+    Application,
+    ApplicationSystemRequirement,
+    ApplicationExtractionLog,
+    RequirementExtractionLog,
+)
 from .ai_scraper import get_ai_response
 from django.db import transaction
 import json
 
 
 def _save_single_enriched_app_data(
-    app_data: dict, activity: Activity
+    app_data: dict, activity: Activity, extraction_log: ApplicationExtractionLog
 ) -> Application | None:
     """
     Helper function to save the data for a single application from the AI's response.
@@ -31,12 +37,20 @@ def _save_single_enriched_app_data(
             )
 
             # If the app was newly created, it needs its requirements added.
+            # --- Start of new logging logic ---
             if created:
                 print(
                     f"Creating new application '{application.name}' with requirements."
                 )
                 requirements_data = app_data.get("requirements", [])
                 for req in requirements_data:
+                    # Create a log for this specific requirement extraction
+                    req_log = RequirementExtractionLog.objects.create(
+                        application=application,
+                        source_extraction_log=extraction_log,
+                        extracted_cpu=req.get("cpu"),
+                        extracted_gpu=req.get("gpu"),
+                    )
                     # The model's smart .save() method will handle fetching scores.
                     ApplicationSystemRequirement.objects.create(
                         application=application,
@@ -118,13 +132,20 @@ def discover_and_enrich_apps_for_activity(activity: Activity) -> list[Applicatio
         print(f"AI failed to return a response for '{activity.name}'.")
         return []
 
+    # --- LOG THE AI's RAW RESPONSE ---
+    extraction_log = ApplicationExtractionLog.objects.create(
+        activity=activity, raw_ai_response=raw_response
+    )
+
     try:
         data = json.loads(raw_response)
         applications_data = data.get("discovered_applications", [])
 
         processed_apps = []
         for app_data in applications_data:
-            app_object = _save_single_enriched_app_data(app_data, activity)
+            app_object = _save_single_enriched_app_data(
+                app_data, activity, extraction_log
+            )
             if app_object:
                 processed_apps.append(app_object)
 

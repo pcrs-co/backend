@@ -1,10 +1,4 @@
 # ai_recommender/logic/recommendation_engine.py
-
-from ..models import (
-    UserPreference,
-    ApplicationSystemRequirement,
-    RecommendationSpecification,
-)
 from django.db.models import F, Max
 
 
@@ -30,6 +24,14 @@ def generate_recommendation(user=None, session_id=None):
     """
     Generates a complete RecommendationSpecification based on a user's preferences.
     """
+    from ..models import (
+        RecommendationFeedback,
+        RecommendationLog,
+        UserPreference,
+        ApplicationSystemRequirement,
+        RecommendationSpecification,
+    )
+
     pref_filter = {}
     if user and user.is_authenticated:
         pref_filter["user"] = user
@@ -97,7 +99,40 @@ def generate_recommendation(user=None, session_id=None):
         session_id=str(pref.session_id) if not pref.user else None,
         defaults={"source_preference": pref, **defaults},
     )
+
+    if created:
+        # If we created a new recommendation, create a blank feedback form for it.
+        RecommendationFeedback.objects.create(recommendation=rec)
+        print(f"Created blank feedback form for new recommendation {rec.id}.")
+
     print(
         f"{'Created' if created else 'Updated'} recommendation {rec.id} for preference {pref.id}."
     )
+    # --- THIS IS THE NEW LEARNING STEP ---
+    # Create a log entry of this decision for later review.
+    # We only create a new log, we never update an old one.
+    RecommendationLog.objects.create(
+        source_preference=pref,
+        final_recommendation=rec,
+        activities_json=list(pref.activities.values_list("name", flat=True)),
+        applications_json=[
+            {
+                "name": app.name,
+                "min_cpu": (
+                    app.requirements.filter(type="minimum").first().cpu
+                    if app.requirements.filter(type="minimum").exists()
+                    else None
+                ),
+                "rec_cpu": (
+                    app.requirements.filter(type="recommended").first().cpu
+                    if app.requirements.filter(type="recommended").exists()
+                    else None
+                ),
+            }
+            for app in apps
+        ],
+    )
+    print(f"Created RecommendationLog for recommendation {rec.id}.")
+    # --- END OF NEW LEARNING STEP ---
+
     return rec
