@@ -179,6 +179,16 @@ DATABASES = {
     )
 }
 
+if ENVIRONMENT == 'production':
+    # This is the path where Render will place our secret file
+    ca_cert_path = '/etc/secrets/ca.pem' 
+    if os.path.exists(ca_cert_path):
+        DATABASES['default']['OPTIONS'] = {
+            'ssl': {
+                'ca': ca_cert_path
+            }
+        }
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
