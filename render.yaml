@@ -1,9 +1,13 @@
+# render.yaml
+
 services:
+  # 1. Redis broker (used by Celery)
   - type: redis
     name: redis-broker
     plan: free
     ipAllowList: []
 
+  # 2. Django Backend API Service
   - type: web
     name: backend-api
     env: python
@@ -16,24 +20,37 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
-      - key: ENVIRONMENT
-        value: production
       - key: DJANGO_SETTINGS_MODULE
         value: backend.settings
+      - key: ENVIRONMENT
+        value: production
       - key: SECRET_KEY
-        value: your-secret-key-here
+        value: SECRET_KEY
       - key: DATABASE_URL
-        value: postgres://user:pass@host:5432/dbname
-      - key: DEBUG
-        value: "false"
-      - key: ALLOWED_HOSTS
-        value: yourdomain.com
+        value: DATABASE_URL
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis-broker
           property: connectionString
+      - key: OPENAI_API_KEY
+        value: OPENAI_API_KEY
+      - key: GMAIL_APP_PASSWORD
+        value: GMAIL_APP_PASSWORD
+      - key: GOOGLE_API_KEY
+        value: GOOGLE_API_KEY
+      - key: CLOUDINARY_CLOUD_NAME
+        value: CLOUDINARY_CLOUD_NAME
+      - key: CLOUDINARY_API_KEY
+        value: CLOUDINARY_API_KEY
+      - key: CLOUDINARY_API_SECRET
+        value: CLOUDINARY_API_SECRET
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_HOSTS
+        value: yourdomain.com
 
+  # 3. Celery Worker Service
   - type: worker
     name: celery-worker
     env: python
@@ -43,20 +60,32 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
-      - key: ENVIRONMENT
-        value: production
       - key: DJANGO_SETTINGS_MODULE
         value: backend.settings
+      - key: ENVIRONMENT
+        value: production
       - key: SECRET_KEY
-        value: your-secret-key-here
+        value: SECRET_KEY
       - key: DATABASE_URL
-        value: postgres://user:pass@host:5432/dbname
-      - key: DEBUG
-        value: "false"
-      - key: ALLOWED_HOSTS
-        value: yourdomain.com
+        value: DATABASE_URL
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis-broker
           property: connectionString
+      - key: OPENAI_API_KEY
+        value: OPENAI_API_KEY
+      - key: GMAIL_APP_PASSWORD
+        value: GMAIL_APP_PASSWORD
+      - key: GOOGLE_API_KEY
+        value: GOOGLE_API_KEY
+      - key: CLOUDINARY_CLOUD_NAME
+        value: CLOUDINARY_CLOUD_NAME
+      - key: CLOUDINARY_API_KEY
+        value: CLOUDINARY_API_KEY
+      - key: CLOUDINARY_API_SECRET
+        value: CLOUDINARY_API_SECRET
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_HOSTS
+        value: yourdomain.com
