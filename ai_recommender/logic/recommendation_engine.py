@@ -53,7 +53,7 @@ def generate_recommendation(user=None, session_id=None):
     3.  **Synthesize the Final Specification:**
         - For CPU and GPU, select the name and score of the single MOST demanding "recommended" requirement.
         - For RAM, select the highest "recommended" RAM value.
-        - For Storage Size, SUM the storage requirements of ALL identified software to get a total.
+        - For Storage Size, SUM the storage requirements of ALL identified software to get a total or provide a reasonable estimate.
         - For Storage Type, choose 'SSD' if any recommended spec requires it, otherwise 'HDD'.
     4.  **Write a Summary:** Based on the user's needs and the specs you just synthesized, write a friendly, encouraging "ai_title" and "ai_summary" for the recommendation.
     5.  **Format Output:** Your entire response MUST be a single, valid JSON object with the exact structure below.
