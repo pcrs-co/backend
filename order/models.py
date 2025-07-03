@@ -64,6 +64,11 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
+    # --- THIS IS THE FIX ---
+    # Assign your custom manager to the 'objects' attribute.
+    objects = OrderManager()
+
+    # --- END OF FIX ---
     def confirm(self):
         """Confirms an order, moving stock from pending to sold. Pushes for errors."""
         if self.status != "pending":
