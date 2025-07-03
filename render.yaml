@@ -1,18 +1,13 @@
-# render.yaml
-
 services:
-  # 1. Redis for Celery Broker
   - type: redis
     name: redis-broker
-    plan: free # Consider a paid plan for production for higher reliability
-    ipAllowList: [] # Allows other services in your Render account to connect
+    plan: free
+    ipAllowList: []
 
-  # 2. Django Web Service (API)
   - type: web
     name: backend-api
-    # --- FIX: Standardized to use 'env' instead of 'runtime' ---
     env: python
-    plan: free # Consider a paid "Starter" plan for production
+    plan: free
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
@@ -20,21 +15,25 @@ services:
     startCommand: "gunicorn backend.wsgi:application"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.3 # Or your specific Python version
+        value: 3.12.3
       - key: ENVIRONMENT
         value: production
-      # --- FIX: All secrets are now pulled from a single, secure Environment Group ---
-      - from:
-          type: envVarGroup
-          name: fyp-secrets
-      # This links to the Redis service defined above
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: SECRET_KEY
+        value: your-secret-key-here
+      - key: DATABASE_URL
+        value: postgres://user:pass@host:5432/dbname
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_HOSTS
+        value: yourdomain.com
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis-broker
           property: connectionString
 
-  # 3. Celery Background Worker
   - type: worker
     name: celery-worker
     env: python
@@ -46,17 +45,16 @@ services:
         value: 3.12.3
       - key: ENVIRONMENT
         value: production
-      # --- FIX: Pulls all secrets from the same Environment Group as the web service ---
-      - from:
-          type: envVarGroup
-          name: fyp-secrets
-      # --- FIX: This correctly and securely syncs the worker's SECRET_KEY with the web service's ---
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
       - key: SECRET_KEY
-        fromService:
-          type: web
-          name: backend-api
-          envVarKey: SECRET_KEY
-      # Links to the Redis service
+        value: your-secret-key-here
+      - key: DATABASE_URL
+        value: postgres://user:pass@host:5432/dbname
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_HOSTS
+        value: yourdomain.com
       - key: REDIS_URL
         fromService:
           type: redis
