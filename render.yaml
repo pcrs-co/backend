@@ -1,0 +1,61 @@
+# render.yaml
+
+services:
+  # 1. Redis for Celery
+  - type: redis
+    name: redis-broker
+    plan: free
+    ipAllowList: [] # Allows other services in your Render account to connect
+
+  # 2. The Django Web App (API)
+  - type: web
+    name: backend-api
+    runtime: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: "gunicorn backend.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2 # Or your specific Python version
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true # Render will create a secure, random key
+      - key: DATABASE_URL
+        fromService:
+          type: pserv
+          name: planetscale-db # This is a placeholder; we will connect it later
+          property: url
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-broker
+          property: connectionString
+
+  # 3. The Celery Background Worker
+  - type: worker
+    name: celery-worker
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A backend worker -l info"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        sync: false # This will sync with the web service's generated key
+      - key: DATABASE_URL
+        fromService:
+          type: pserv
+          name: planetscale-db
+          property: url
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-broker
+          property: connectionString
