@@ -45,6 +45,9 @@ services:
     plan: free
     buildCommand: "pip install -r requirements.txt"
     startCommand: "celery -A backend worker -l info"
+    secretFiles:
+      - key: ca.pem
+        mountPath: /etc/secrets/ca.pem
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
