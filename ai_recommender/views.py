@@ -87,50 +87,56 @@ class RecommendView(APIView):
     def post(self, request, *args, **kwargs):
         """
         This single endpoint now orchestrates the entire recommendation process.
-        1. Validates user input and creates a UserPreference.
-        2. Runs AI discovery to find applications for the given activities.
-        3. Generates the final hardware specification recommendation.
-        4. Returns the specs to the frontend.
+        It ALWAYS runs the AI discovery to ensure every recommendation is personalized.
         """
-        # Step 1: Validate input and create the UserPreference object
-        # We can still use our excellent serializer for this.
+        # Step 1: Validate input and create the UserPreference object.
         serializer = UserPreferenceSerializer(
             data=request.data, context={"request": request}
         )
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # The .save() method on the serializer will create the preference and link activities
+        # The .save() method creates the preference and links the selected activity/ies.
         preference = serializer.save()
 
-        # --- Step 2: Perform AI Enrichment Synchronously ---
-        # Instead of a Celery task, we do the work right here, because the user is waiting.
-        user_activities = preference.activities.all()
-        # --- GET THE CONSIDERATIONS FROM THE PREFERENCE OBJECT ---
+        # --- Step 2: Perform PERSONALIZED AI Enrichment ---
+        # We now ALWAYS run the AI discovery for every new preference.
+        # This ensures the user's 'considerations' are always used.
+
+        # Get the primary activity to guide the AI and the user's specific considerations.
+        primary_activity = preference.activities.first()
         user_considerations = preference.considerations
 
+        if not primary_activity:
+            return Response(
+                {
+                    "detail": "No primary activity was provided to generate a recommendation."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         print(f"--- Starting Synchronous Enrichment for Preference {preference.id} ---")
-        for activity in user_activities:
-            # Only run the expensive AI call if we don't already have data for this activity
-            if not activity.applications.exists():
-                print(f"-> Activity '{activity.name}' is new. Running AI discovery...")
-                # --- PASS CONSIDERATIONS TO THE FUNCTION ---
-                newly_processed_apps = discover_and_enrich_apps_for_activity(
-                    activity, user_considerations
-                )
-                if newly_processed_apps:
-                    preference.applications.add(*newly_processed_apps)
-            else:
-                print(
-                    f"-> Activity '{activity.name}' is already known. Linking existing apps."
-                )
-                existing_apps = activity.applications.all()
-                preference.applications.add(*existing_apps)
+        print(
+            f"-> Running AI discovery for '{primary_activity.name}' with considerations: '{user_considerations}'"
+        )
+
+        # This function discovers and saves applications to the database if they don't exist.
+        newly_processed_apps = discover_and_enrich_apps_for_activity(
+            primary_activity, user_considerations
+        )
+
+        if newly_processed_apps:
+            # We link the personalized list of apps directly to THIS user's preference.
+            preference.applications.add(*newly_processed_apps)
+        else:
+            print(
+                f"-> AI discovery failed or returned no apps for '{primary_activity.name}'."
+            )
 
         print(f"--- Enrichment complete for Preference {preference.id} ---")
 
         # --- Step 3: Generate the final recommendation ---
-        # This function will now find a fully enriched preference object
+        # This function will now find the UserPreference with its newly linked, personalized apps.
         user = request.user if request.user.is_authenticated else None
         session_id = preference.session_id if not user else None
 

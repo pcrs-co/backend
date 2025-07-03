@@ -76,7 +76,7 @@ def discover_and_enrich_apps_for_activity(
     activity: Activity, user_considerations: str = ""
 ) -> list[Application]:
     """
-    Uses a single, powerful AI call to get up to 3 applications for an activity
+    Uses a single, powerful AI call to get up to 5 applications for an activity
     AND their system requirements all at once.
     """
     print(f"Starting one-shot AI discovery for activity: '{activity.name}'")
@@ -90,7 +90,7 @@ def discover_and_enrich_apps_for_activity(
 
     # --- THE NEW, MORE EFFECTIVE PROMPT ---
     prompt = f"""
-    You are an expert PC hardware analyst. Your task is to identify up to 3 specific **software titles or video games** that are excellent examples for the user's primary activity: **"{activity.name}"**.
+    You are an expert PC hardware analyst. Your task is to identify up to 5 specific **software titles or video games** that are excellent and best suited for the user's primary activity: **"{activity.name}"**.
 
     **IMPORTANT:** Do NOT list utility software like "Discord", "Steam", "OBS", or "Nvidia GeForce Experience". I only want the actual game or application titles that are demanding on the hardware.
 
