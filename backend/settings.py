@@ -53,15 +53,15 @@ else:
     if RENDER_EXTERNAL_HOSTNAME:
         ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 from corsheaders.defaults import default_headers
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "authorization",
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+CORS_ALLOWED_ORIGINS = ["http://localhost:5173", FRONTEND_URL]
 # CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWS_CREDENTIALS = True
 
@@ -184,6 +184,9 @@ if ENVIRONMENT == "production":
     ca_cert_path = "/etc/ssl/certs/ca-certificates.crt"
     if os.path.exists(ca_cert_path):
         DATABASES["default"]["OPTIONS"] = {"ssl": {"ca": ca_cert_path}}
+    else:
+        # This is a helpful debug message in case the path changes on Render in the future.
+        print("WARNING: System CA certificate bundle not found at expected path.")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
