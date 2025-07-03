@@ -1,17 +1,18 @@
 # render.yaml
 
 services:
-  # 1. Redis for Celery
+  # 1. Redis for Celery Broker
   - type: redis
     name: redis-broker
-    plan: free
+    plan: free # Consider a paid plan for production for higher reliability
     ipAllowList: [] # Allows other services in your Render account to connect
 
-  # 2. The Django Web App (API)
+  # 2. Django Web Service (API)
   - type: web
     name: backend-api
-    runtime: python
-    plan: free
+    # --- FIX: Standardized to use 'env' instead of 'runtime' ---
+    env: python
+    plan: free # Consider a paid "Starter" plan for production
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
@@ -22,39 +23,40 @@ services:
         value: 3.12.3 # Or your specific Python version
       - key: ENVIRONMENT
         value: production
-      - key: SECRET_KEY
-        generateValue: true # Render will create a secure, random key
-      - key: DATABASE_URL
-        fromService:
-          type: pserv
-          name: planetscale-db # This is a placeholder; we will connect it later
-          property: url
+      # --- FIX: All secrets are now pulled from a single, secure Environment Group ---
+      - from:
+          type: envVarGroup
+          name: fyp-secrets
+      # This links to the Redis service defined above
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis-broker
           property: connectionString
 
-  # 3. The Celery Background Worker
+  # 3. Celery Background Worker
   - type: worker
     name: celery-worker
-    runtime: python
+    env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "celery -A backend worker -l info"
-
+    startCommand: "celery -A backend.celery worker -l info"
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
       - key: ENVIRONMENT
         value: production
+      # --- FIX: Pulls all secrets from the same Environment Group as the web service ---
+      - from:
+          type: envVarGroup
+          name: fyp-secrets
+      # --- FIX: This correctly and securely syncs the worker's SECRET_KEY with the web service's ---
       - key: SECRET_KEY
-        sync: false # This will sync with the web service's generated key
-      - key: DATABASE_URL
         fromService:
-          type: pserv
-          name: planetscale-db
-          property: url
+          type: web
+          name: backend-api
+          envVarKey: SECRET_KEY
+      # Links to the Redis service
       - key: REDIS_URL
         fromService:
           type: redis
