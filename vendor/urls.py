@@ -20,4 +20,5 @@ urlpatterns = [
         PublicProductDetailView.as_view(),
         name="public-product-detail",
     ),
+    path("products/", PublicProductListView.as_view(), name="public-product-list"),
 ]

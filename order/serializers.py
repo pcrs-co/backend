@@ -1,6 +1,44 @@
 from rest_framework import serializers
 from .models import *
 
+# --- IMPORT NECESSARY SERIALIZERS ---
+from login_and_register.serializers import (
+    UserDetailSerializer,
+    VendorSerializer,
+)  # Assuming these exist
+from vendor.serializers import ProductSerializer  # Assuming this exists from vendor app
+
+
+# A minimal serializer for User data within the Order
+class UserSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = (
+            UserDetailSerializer.Meta.model
+        )  # Use the model from UserDetailSerializer
+        fields = ["id", "first_name", "last_name", "email", "phone_number"]
+
+
+# A minimal serializer for Vendor data within the Order
+class VendorSimpleSerializer(serializers.ModelSerializer):
+    user = UserSimpleSerializer(read_only=True)  # Nest user details within vendor
+
+    class Meta:
+        model = VendorSerializer.Meta.model  # Use the model from VendorSerializer
+        fields = [
+            "id",
+            "company_name",
+            "location",
+            "user",
+        ]  # Include 'user' for phone/email
+
+
+# A minimal serializer for Product data within the Order
+class ProductSimpleSerializer(serializers.ModelSerializer):
+    # This just gets the name and price for display in the order list
+    class Meta:
+        model = ProductSerializer.Meta.model  # Use the model from ProductSerializer
+        fields = ["id", "name", "price", "brand"]
+
 
 class OrderSerializer(serializers.ModelSerializer):
     from login_and_register.serializers import NestedVendorProfileSerializer
@@ -15,6 +53,9 @@ class OrderSerializer(serializers.ModelSerializer):
 
     # --- THIS IS THE FIX: Nest vendor details for the frontend ---
     vendor = NestedVendorProfileSerializer(read_only=True)
+    # --- FIX: Use nested serializers for read operations ---
+    user = UserSimpleSerializer(read_only=True)
+    product = ProductSimpleSerializer(read_only=True)
 
     class Meta:
         model = Order

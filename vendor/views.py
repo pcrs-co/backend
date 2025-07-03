@@ -119,3 +119,15 @@ class PublicProductDetailView(generics.RetrieveAPIView):
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
     lookup_field = "id"  # The URL will use the product ID
+
+
+# --- ADD THIS NEW VIEW AT THE END OF THE FILE ---
+class PublicProductListView(generics.ListAPIView):
+    """
+    A public, read-only endpoint that lists all available products.
+    """
+
+    queryset = Product.objects.all().order_by("-created_at")
+    # We use the standard ProductSerializer for public viewing
+    serializer_class = ProductSerializer
+    permission_classes = [AllowAny]
