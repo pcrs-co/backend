@@ -152,32 +152,29 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
         return preference
 
 
-# +++ UPGRADED RecommendationSpecificationSerializer +++
-class RecommendationSpecificationSerializer(serializers.ModelSerializer):
-    """
-    Presents the final recommendation in a clean, robust, and nested JSON format
-    for the frontend. Provides default values to prevent frontend errors.
-    """
+# In RecommendationSpecificationSerializer
 
+
+class RecommendationSpecificationSerializer(serializers.ModelSerializer):
     minimum_specs = serializers.SerializerMethodField()
     recommended_specs = serializers.SerializerMethodField()
-    note = serializers.SerializerMethodField()
-
     session_id = serializers.CharField(
-        source="source_preference.session_id", read_only=True
+        source="source_preference.session_id", read_only=True, allow_null=True
     )
 
     class Meta:
         model = RecommendationSpecification
-        fields = ["session_id", "note", "minimum_specs", "recommended_specs"]
+        # We now pass the new fields directly
+        fields = [
+            "session_id",
+            "ai_title",
+            "ai_summary",
+            "minimum_specs",
+            "recommended_specs",
+        ]
 
-    def get_note(self, obj):
-        if not obj.recommended_cpu_name:
-            return "We are still processing your request. Please check back in a few minutes to see your personalized recommendations."
-        return "Based on your needs, a computer with the 'recommended' specifications will provide the best experience. The 'minimum' specs are for basic usage only."
-
+    # These helper methods are still great for structuring the nested spec objects
     def get_minimum_specs(self, obj):
-        """Returns the minimum spec set with safe defaults."""
         return {
             "type": "minimum",
             "cpu": obj.min_cpu_name or "Not determined",
@@ -188,7 +185,6 @@ class RecommendationSpecificationSerializer(serializers.ModelSerializer):
         }
 
     def get_recommended_specs(self, obj):
-        """Returns the recommended spec set with safe defaults."""
         return {
             "type": "recommended",
             "cpu": obj.recommended_cpu_name or "Not determined",
