@@ -1,5 +1,4 @@
-# render.yaml
-
+# render.yaml - Secure Configuration
 services:
   # 1. Redis broker (used by Celery)
   - type: redis
@@ -12,80 +11,92 @@ services:
     name: backend-api
     env: python
     plan: free
+    region: us-east-1  # Match your database region
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
       python manage.py migrate
-    startCommand: "gunicorn backend.wsgi:application"
+    startCommand: "gunicorn backend.wsgi:application --workers 2"
+    healthCheckPath: /health/
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
       - key: DJANGO_SETTINGS_MODULE
-        value: backend.settings
+        value: backend.settings.production
       - key: ENVIRONMENT
         value: production
       - key: SECRET_KEY
-        value: SECRET_KEY
+        sync: false  # Set in Render dashboard
       - key: DATABASE_URL
-        value: DATABASE_URL
+        sync: false  # Set in Render dashboard
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis-broker
           property: connectionString
-      - key: OPENAI_API_KEY
-        value: OPENAI_API_KEY
-      - key: GMAIL_APP_PASSWORD
-        value: GMAIL_APP_PASSWORD
-      - key: GOOGLE_API_KEY
-        value: GOOGLE_API_KEY
-      - key: CLOUDINARY_CLOUD_NAME
-        value: CLOUDINARY_CLOUD_NAME
-      - key: CLOUDINARY_API_KEY
-        value: CLOUDINARY_API_KEY
-      - key: CLOUDINARY_API_SECRET
-        value: CLOUDINARY_API_SECRET
       - key: DEBUG
         value: "false"
       - key: ALLOWED_HOSTS
-        value: yourdomain.com
+        value: .yourdomain.com,backend-api.onrender.com
+      # External services (set in Render dashboard)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
 
   # 3. Celery Worker Service
   - type: worker
     name: celery-worker
     env: python
     plan: free
+    region: us-east-1  # Same region as other services
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "celery -A backend.celery worker -l info"
+    startCommand: "celery -A backend.celery worker --loglevel=info --concurrency=2"
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
       - key: DJANGO_SETTINGS_MODULE
-        value: backend.settings
+        value: backend.settings.production
       - key: ENVIRONMENT
         value: production
       - key: SECRET_KEY
-        value: SECRET_KEY
+        fromService:
+          type: web
+          name: backend-api
+          property: SECRET_KEY
       - key: DATABASE_URL
-        value: DATABASE_URL
+        fromService:
+          type: web
+          name: backend-api
+          property: DATABASE_URL
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis-broker
           property: connectionString
-      - key: OPENAI_API_KEY
-        value: OPENAI_API_KEY
-      - key: GMAIL_APP_PASSWORD
-        value: GMAIL_APP_PASSWORD
-      - key: GOOGLE_API_KEY
-        value: GOOGLE_API_KEY
-      - key: CLOUDINARY_CLOUD_NAME
-        value: CLOUDINARY_CLOUD_NAME
-      - key: CLOUDINARY_API_KEY
-        value: CLOUDINARY_API_KEY
-      - key: CLOUDINARY_API_SECRET
-        value: CLOUDINARY_API_SECRET
       - key: DEBUG
         value: "false"
-      - key: ALLOWED_HOSTS
-        value: yourdomain.com
+      # Inherit all other vars from backend-api
+      - key: OPENAI_API_KEY
+        fromService:
+          type: web
+          name: backend-api
+          property: OPENAI_API_KEY
+      - key: GMAIL_APP_PASSWORD
+        fromService:
+          type: web
+          name: backend-api
+          property: GMAIL_APP_PASSWORD
+      - key: CLOUDINARY_CLOUD_NAME
+        fromService:
+          type: web
+          name: backend-api
+          property: CLOUDINARY_CLOUD_NAME
