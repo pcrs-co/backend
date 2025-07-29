@@ -15,7 +15,6 @@ from datetime import timedelta
 from dotenv import load_dotenv
 import pymysql
 import os
-import dj_database_url
 
 pymysql.install_as_MySQLdb()
 
@@ -26,10 +25,6 @@ load_dotenv()
 #     "AUTH_HEADER_TYPES": ("Bearer",),
 # }
 
-# --- 1. ENVIRONMENT SETUP ---
-# This lets us know if we are in 'development' (your PC) or 'production' (Render)
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -38,33 +33,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", "insecure-key-for-development")
+SECRET_KEY = "django-insecure-16n3ra5y7cftgeb!adc-xf!@2=72e7a35elh=t^t@%)i(*e0j="
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = ENVIRONMENT == "development"
+DEBUG = True
 
-# --- 3. HOSTS AND CORS ---
-# In production, only Render's domain and your frontend's domain are allowed.
-if DEBUG:
-    ALLOWED_HOSTS = ["*"]  # Allow all hosts in local development
-else:
-    ALLOWED_HOSTS = []
-    RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-    if RENDER_EXTERNAL_HOSTNAME:
-        ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
-from corsheaders.defaults import default_headers
-
-CORS_ALLOW_HEADERS = list(default_headers) + [
-    "authorization",
-]
-
-CORS_ALLOWED_ORIGINS = ["http://localhost:5173", FRONTEND_URL]
-# CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWS_CREDENTIALS = True
-
+ALLOWED_HOSTS = ["*"]
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -99,8 +73,6 @@ INSTALLED_APPS = [
     "ai_recommender",
     "vendor",
     "order",
-    "cloudinary_storage",  # For media file storage
-    "cloudinary",
 ]
 
 INSTALLED_APPS += ["django_extensions"]
@@ -108,7 +80,6 @@ INSTALLED_APPS += ["django_extensions"]
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Whitenoise middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -147,46 +118,23 @@ EMAIL_HOST_USER = "contacts.pcrs@gmail.com"
 EMAIL_HOST_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 DEFAULT_FROM_EMAIL = "contacts.pcrs@gmail.com"
 
-# --- 7. STATIC & MEDIA FILES CONFIGURATION ---
-# Static files (for Django Admin CSS/JS)
-STATIC_URL = "/static/"
-STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-# Media files (user uploads like product images)
 # Media configuration
 MEDIA_URL = "/media/"
-if ENVIRONMENT == "production":
-    CLOUDINARY_STORAGE = {
-        "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
-        "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
-        "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
-    }
-    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-else:
-    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# --- 5. DATABASE CONFIGURATION ---
-# This one block of code works for BOTH local development and production on Render.
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.getenv("DATABASE_URL"),  # Reads the full URL from the environment
-        conn_max_age=600,
-        ssl_require=(ENVIRONMENT == "production"),  # Require SSL only in production
-    )
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "pcrs",
+        "USER": "pcrs",
+        "PASSWORD": "Pcrs@password3",
+        "HOST": "localhost",
+        "PORT": "3306",
+    }
 }
-
-if ENVIRONMENT == "production":
-    # This is the path where Render will place our secret file
-    ca_cert_path = "/etc/ssl/certs/ca-certificates.crt"
-    if os.path.exists(ca_cert_path):
-        DATABASES["default"]["OPTIONS"] = {"ssl": {"ca": ca_cert_path}}
-    else:
-        # This is a helpful debug message in case the path changes on Render in the future.
-        print("WARNING: System CA certificate bundle not found at expected path.")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -225,26 +173,49 @@ USE_I18N = True
 USE_TZ = True
 
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.1/howto/static-files/
+
+STATIC_URL = "static/"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
+# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWS_CREDENTIALS = True
+
 # ==============================================================================
 # CELERY SETTINGS
 # ==============================================================================
-from celery.schedules import crontab
 
 # This is the URL of your Redis server.
-# --- 8. CELERY CONFIGURATION ---
-CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# If Redis is running on the same machine on its default port, this is correct.
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+
+# This tells Celery to store task results in Redis as well.
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+
+# This tells Celery to accept content in 'application/json' format.
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+
+# This sets the timezone for Celery to match your Django project's timezone.
 CELERY_TIMEZONE = TIME_ZONE  # TIME_ZONE should already be defined in your settings
 
+from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
     # This single, smart task replaces the two old, inefficient ones.
